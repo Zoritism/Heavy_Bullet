@@ -1,142 +1,67 @@
-plugins {
-    id 'eclipse'
-    id 'idea'
-    id 'maven-publish'
-    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
-    id 'org.jetbrains.kotlin.jvm' version '1.9.23'
-}
+package com.zoritism.heavybullet.backpack
 
-version = mod_version
-group = mod_group_id
+import net.minecraft.core.BlockPos
+import net.minecraft.nbt.CompoundTag
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.phys.Vec3
+import net.spaceeye.vmod.api.VSCoreAPI
+import org.valkyrienskies.core.api.ships.ServerShip
+import java.util.UUID
 
-base {
-    archivesName = mod_id
-}
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+object VModSchematicJavaHelper {
 
-println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
-minecraft {
-    mappings channel: mapping_channel, version: mapping_version
-    copyIdeResources = true
-    runs {
-        configureEach {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
+    /**
+     * Поиск корабля по позиции блока — по аналогии с реализацией из VMod/ShipUtils.
+     * Используется VSCoreAPI из VMod.
+     */
+    @JvmStatic
+    fun findServerShip(level: ServerLevel, pos: BlockPos): DockyardUpgradeLogic.ServerShipHandle? {
+        val shipWorld = VSCoreAPI.serverShipWorld(level)
+        val x = pos.x + 0.5
+        val y = pos.y + 0.5
+        val z = pos.z + 0.5
+        for (ship in shipWorld.ships) {
+            val aabb = ship.worldAABB ?: continue
+            if (x >= aabb.minX() && x <= aabb.maxX() &&
+                    y >= aabb.minY() && y <= aabb.maxY() &&
+                    z >= aabb.minZ() && z <= aabb.maxZ()) {
+                return object : DockyardUpgradeLogic.ServerShipHandle {
+                    override fun getServerShip(): Any = ship
+                    override fun getId(): Long = ship.id
                 }
             }
         }
-
-        client {
-            property 'forge.enabledGameTestNamespaces', mod_id
-        }
-
-        server {
-            property 'forge.enabledGameTestNamespaces', mod_id
-            args '--nogui'
-        }
-        gameTestServer {
-            property 'forge.enabledGameTestNamespaces', mod_id
-        }
-
-        data {
-            workingDirectory project.file('run-data')
-
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-        }
-    }
-}
-
-sourceSets {
-    main {
-        java {
-            srcDirs += 'src/main/kotlin'
-        }
-    }
-}
-sourceSets.main.resources { srcDir 'src/generated/resources' }
-
-repositories {
-    maven { url = 'https://maven.minecraftforge.net/' }
-    maven { url 'https://maven.valkyrienskies.org/' }
-    flatDir { dirs 'libs' }
-    maven { url = "https://www.cursemaven.com"
-        content { includeGroup "curse.maven" }
-    }
-    mavenCentral()
-}
-
-dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-
-    implementation fg.deobf("curse.maven:sophisticated-backpacks-422301:6679415")
-    implementation fg.deobf("curse.maven:sophisticated-core-618298:6680838")
-    implementation fg.deobf("curse.maven:valkyrien-skies-258371:6510608")
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-
-
-    implementation("org.joml:joml:1.10.4") { transitive = false }
-    implementation("org.joml:joml-primitives:1.10.0") { transitive = false }
-    implementation "org.valkyrienskies.core:api:1.1.0+da86725858"
-    implementation "org.valkyrienskies.core:api-game:1.1.0+da86725858"
-    implementation "org.valkyrienskies.core:util:1.1.0+da86725858"
-    implementation "org.valkyrienskies.core:impl:1.1.0+da86725858"
-
-    // Если используешь vmod как отдельный jar
-    compileOnly name: 'VMod-Forge-1.20.1-0.1.3'
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-}
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    kotlinOptions.jvmTarget = "17"
-}
-
-tasks.named('processResources', ProcessResources).configure {
-    var replaceProperties = [
-            minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
-            forge_version: forge_version, forge_version_range: forge_version_range,
-            loader_version_range: loader_version_range,
-            mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
-            mod_authors: mod_authors, mod_description: mod_description,
-    ]
-    inputs.properties replaceProperties
-
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand replaceProperties + [project: project]
-    }
-}
-
-tasks.named('jar', Jar).configure {
-    manifest {
-        attributes([
-                'Specification-Title'     : mod_id,
-                'Specification-Vendor'    : mod_authors,
-                'Specification-Version'   : '1', // We are version 1 of ourselves
-                'Implementation-Title'    : project.name,
-                'Implementation-Version'  : project.jar.archiveVersion,
-                'Implementation-Vendor'   : mod_authors,
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
-        ])
+        return null
     }
 
-    finalizedBy 'reobfJar'
-}
-
-publishing {
-    publications {
-        register('mavenJava', MavenPublication) {
-            artifact jar
-        }
+    @JvmStatic
+    fun saveShipToNBT(
+            level: ServerLevel,
+            player: ServerPlayer,
+            uuid: UUID,
+            ship: DockyardUpgradeLogic.ServerShipHandle,
+            nbt: CompoundTag
+    ): Boolean {
+        val serverShip = ship.getServerShip() as? ServerShip ?: return false
+        // По аналогии с BottleShip — просто сохранить id корабля
+        nbt.putLong("vs_ship_id", serverShip.id)
+        return true
     }
-    repositories {
-        maven {
-            url "file://${project.projectDir}/mcmodsrepo"
-        }
+
+    @JvmStatic
+    fun spawnShipFromNBT(
+            level: ServerLevel,
+            player: ServerPlayer,
+            uuid: UUID,
+            pos: Vec3,
+            nbt: CompoundTag
+    ) {
+        // Воссоздание корабля из NBT не реализовано в открытом API VS2/VMod, оставить пустым
+    }
+
+    @JvmStatic
+    fun removeShip(level: ServerLevel, ship: DockyardUpgradeLogic.ServerShipHandle) {
+        // Удаление корабля из мира не реализовано в открытом API VS2/VMod, оставить пустым
     }
 }
