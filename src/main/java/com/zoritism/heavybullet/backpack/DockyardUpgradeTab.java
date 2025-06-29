@@ -34,24 +34,24 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             )
     );
 
-    // Общие параметры для разметки
-    private static final int CONTENT_OFFSET_X = 44; // Смещение содержимого вправо (чтобы не налезало на иконку)
-    private static final int BLOCK_WIDTH = 110;
+    // Параметры для содержимого (оставляем как было)
+    private static final int CONTENT_OFFSET_X = 44;
+    private static final int BLOCK_WIDTH = 160;
     private static final int BLOCK_LINE_HEIGHT = 14;
     private static final int BLOCK_HEIGHT = BLOCK_LINE_HEIGHT * 2 + 6;
     private static final int BLOCK_Y = 24;
     private static final int BUTTON_HEIGHT = 18;
-    private static final int BUTTON_SPACING = 10;
-    private static final int VERTICAL_BOTTOM_PADDING = 12; // отступ снизу
-
-    // Позиции и размеры кнопок
     private static final int BUTTON_Y_OFFSET = BLOCK_Y + BLOCK_HEIGHT + 16;
+    private static final int BUTTON_SPACING = 10;
+    private static final int VERTICAL_BOTTOM_PADDING = 12;
     private static final int BUTTONS_BOTTOM = BUTTON_Y_OFFSET + BUTTON_HEIGHT;
 
-    // Размеры вкладки (по примеру других модов, например smithing/refill):
-    // ширина чуть больше блока, высота — по низу кнопок + отступ
-    private static final int TAB_WIDTH = CONTENT_OFFSET_X + BLOCK_WIDTH + 12; // 12 для небольшого правого поля, как у других вкладок
-    private static final int TAB_HEIGHT = BUTTONS_BOTTOM + VERTICAL_BOTTOM_PADDING;
+    // Рамка: левая сторона ровно по левому краю вкладки (FRAME_LEFT_OFFSET = 0)
+    // Правая сторона как ты настроил (FRAME_RIGHT_PADDING = -20)
+    private static final int FRAME_LEFT_OFFSET = 0;
+    private static final int FRAME_RIGHT_PADDING = -20;
+    private static final int FRAME_WIDTH = CONTENT_OFFSET_X + BLOCK_WIDTH + FRAME_RIGHT_PADDING - FRAME_LEFT_OFFSET;
+    private static final int FRAME_HEIGHT = BUTTONS_BOTTOM + VERTICAL_BOTTOM_PADDING;
 
     // Для хранения состояния кнопок при наведении
     private boolean leftButtonHovered = false;
@@ -61,8 +61,9 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         super(upgradeContainer, position, screen,
                 Component.translatable("gui.heavybullet.dockyard.title"),
                 Component.translatable("gui.heavybullet.dockyard.tooltip"));
-        // Правильное расширение вкладки и рамки
-        openTabDimension = new Dimension(TAB_WIDTH, TAB_HEIGHT);
+
+        // Вкладка теперь расширяет рамку, не смещая содержимое
+        openTabDimension = new Dimension(FRAME_WIDTH, FRAME_HEIGHT);
 
         addHideableChild(
                 new ToggleButton<>(
@@ -85,7 +86,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             return;
         }
 
-        // Рамка с двумя строками текста (смещена вправо)
+        // Содержимое (заглушки и кнопки) отрисовываем как было!
         int xBlock = x + CONTENT_OFFSET_X;
         int yBlock = y + BLOCK_Y;
         graphics.fill(xBlock, yBlock, xBlock + BLOCK_WIDTH, yBlock + BLOCK_HEIGHT, 0xFFAAAAAA);
@@ -94,7 +95,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         graphics.drawString(Minecraft.getInstance().font,
                 Component.literal("Заглушка 2"), xBlock + 6, yBlock + 4 + BLOCK_LINE_HEIGHT, 0x404040, false);
 
-        // Две горизонтальные кнопки под рамкой (смещены вправо, занимают ширину блока)
         int btnWidth = (BLOCK_WIDTH - BUTTON_SPACING) / 2;
         int btn1X = xBlock;
         int btn2X = xBlock + btnWidth + BUTTON_SPACING;
@@ -128,12 +128,12 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     @Override
     public int getWidth() {
-        return isOpen ? TAB_WIDTH : super.getWidth();
+        return isOpen ? FRAME_WIDTH : super.getWidth();
     }
 
     @Override
     public int getHeight() {
-        return isOpen ? TAB_HEIGHT : super.getHeight();
+        return isOpen ? FRAME_HEIGHT : super.getHeight();
     }
 
     @Override
