@@ -1,16 +1,30 @@
 package com.zoritism.heavybullet.backpack;
 
+import net.minecraft.resources.ResourceLocation;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.IUpgradeCountLimitConfig;
+import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeGroup;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeItemBase;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeType;
-import java.util.Collections;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.List;
 
 public class DockyardUpgradeItem extends UpgradeItemBase<DockyardUpgradeWrapper> {
-    public static final UpgradeType<DockyardUpgradeWrapper> TYPE = new UpgradeType<>(DockyardUpgradeWrapper::new);
 
-    public DockyardUpgradeItem(IUpgradeCountLimitConfig config) {
-        super(config);
+    private static final UpgradeType<DockyardUpgradeWrapper> TYPE = new UpgradeType<>(DockyardUpgradeWrapper::new);
+
+    public DockyardUpgradeItem() {
+        super(new IUpgradeCountLimitConfig() {
+            @Override
+            public int getMaxUpgradesPerStorage(String s, @Nullable ResourceLocation resourceLocation) {
+                return Integer.MAX_VALUE;
+            }
+
+            @Override
+            public int getMaxUpgradesInGroupPerStorage(String s, UpgradeGroup upgradeGroup) {
+                return Integer.MAX_VALUE;
+            }
+        });
     }
 
     @Override
@@ -20,6 +34,6 @@ public class DockyardUpgradeItem extends UpgradeItemBase<DockyardUpgradeWrapper>
 
     @Override
     public List<UpgradeConflictDefinition> getUpgradeConflicts() {
-        return Collections.emptyList();
+        return List.of();
     }
 }
