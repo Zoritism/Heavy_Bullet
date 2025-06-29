@@ -7,8 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.valkyrienskies.core.api.ships.ServerShip;
-import org.valkyrienskies.core.api.ships.Ship;
+import org.valkyrienskies.core.api.ships.LoadedShip;
 import org.valkyrienskies.mod.common.VSGameUtilsKt;
 
 public class DockyardUpgradeLogic {
@@ -31,7 +30,7 @@ public class DockyardUpgradeLogic {
             }
         } else {
             // Навести прицелом на корабль, получить его
-            ServerShip ship = findShipPlayerIsLookingAt(player, 100);
+            LoadedShip ship = findShipPlayerIsLookingAt(player, 100);
             if (ship != null) {
                 CompoundTag shipNbt = new CompoundTag();
                 // Сохраняем корабль в NBT (зависит от вашей интеграции с VS или bottle_ship)
@@ -53,7 +52,7 @@ public class DockyardUpgradeLogic {
     }
 
     // Поиск корабля, на который смотрит игрок (RayTrace)
-    private static ServerShip findShipPlayerIsLookingAt(ServerPlayer player, double reach) {
+    private static LoadedShip findShipPlayerIsLookingAt(ServerPlayer player, double reach) {
         Vec3 eye = player.getEyePosition(1.0F);
         Vec3 look = player.getLookAngle();
         Vec3 target = eye.add(look.x * reach, look.y * reach, look.z * reach);
@@ -64,14 +63,14 @@ public class DockyardUpgradeLogic {
         Vec3 pos = hit.getLocation();
         ServerLevel level = player.serverLevel();
         // Получить объект корабля по координате (VS API)
-        ServerShip ship = VSGameUtilsKt.getShipObjectWorld(level).getShipObjectManagingPos(
+        LoadedShip ship = VSGameUtilsKt.getShipObjectWorld(level).getShipObjectManagingPos(
                 BlockPos.containing(pos.x, pos.y, pos.z)
         );
         return ship;
     }
 
     // Сохраняем корабль в NBT (псевдокод, зависит от API bottle_ship/VS)
-    private static void saveShipToNbt(ServerShip ship, CompoundTag nbt) {
+    private static void saveShipToNbt(LoadedShip ship, CompoundTag nbt) {
         // Здесь должна быть сериализация корабля (API bottle_ship или VS)
         // Например: ship.save(nbt);
         // Или вызов bottle_ship/BottleWithShipItem логики
@@ -84,7 +83,7 @@ public class DockyardUpgradeLogic {
     }
 
     // Удалить корабль из мира (псевдокод)
-    private static void removeShipFromWorld(ServerShip ship) {
+    private static void removeShipFromWorld(LoadedShip ship) {
         // Здесь должна быть корректная процедура удаления корабля
         // Например: ship.remove();
     }
