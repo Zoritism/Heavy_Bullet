@@ -79,7 +79,8 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 
 
-    // Для доступа к API (обязательно!)
+    implementation("org.joml:joml:1.10.4") { transitive = false }
+    implementation("org.joml:joml-primitives:1.10.0") { transitive = false }
     implementation "org.valkyrienskies.core:api:1.1.0+da86725858"
     implementation "org.valkyrienskies.core:api-game:1.1.0+da86725858"
     implementation "org.valkyrienskies.core:util:1.1.0+da86725858"
