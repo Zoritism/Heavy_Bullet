@@ -55,8 +55,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         super(upgradeContainer, position, screen,
                 Component.translatable("gui.heavybullet.dockyard.title"),
                 Component.translatable("gui.heavybullet.dockyard.tooltip"));
-
-        // Одна стандартная toggle-кнопка — как прежде
         addHideableChild(
                 new ToggleButton<>(
                         new Position(x + 3, y + 24),
@@ -75,7 +73,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         super.renderBg(graphics, minecraft, mouseX, mouseY);
 
         if (!isOpen) {
-            // Скрываем всё, кроме иконки/кнопки
             return;
         }
 
