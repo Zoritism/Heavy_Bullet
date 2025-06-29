@@ -1,0 +1,27 @@
+package com.zoritism.heavybullet.network;
+
+import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.simple.SimpleChannel;
+
+public class NetworkHandler {
+    public static final String PROTOCOL_VERSION = "1";
+    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
+            new ResourceLocation("heavy_bullet", "main"),
+            () -> PROTOCOL_VERSION,
+            PROTOCOL_VERSION::equals,
+            PROTOCOL_VERSION::equals
+    );
+
+    private static int packetId = 0;
+
+    public static void register() {
+        CHANNEL.registerMessage(
+                packetId++,
+                C2SHandleBottleShipPacket.class,
+                C2SHandleBottleShipPacket::encode,
+                C2SHandleBottleShipPacket::decode,
+                C2SHandleBottleShipPacket::handle
+        );
+    }
+}

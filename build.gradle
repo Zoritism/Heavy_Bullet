@@ -65,6 +65,7 @@ dependencies {
 
     implementation fg.deobf("curse.maven:sophisticated-backpacks-422301:6679415")
     implementation fg.deobf("curse.maven:sophisticated-core-618298:6680838")
+    implementation fg.deobf("curse.maven:valkyrien-skies-258371:6510608")
 }
 
 tasks.named('processResources', ProcessResources).configure {
