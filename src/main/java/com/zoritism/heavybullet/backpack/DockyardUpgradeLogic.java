@@ -103,7 +103,7 @@ public class DockyardUpgradeLogic {
         LOGGER.info("[DockyardUpgrade] Raytrace hit position: ({}, {}, {})", pos.x, pos.y, pos.z);
 
         // Требуется vmod helper для поиска корабля по позиции!
-        // Например: return VModSchematicJavaHelper.findServerShip(level, BlockPos.containing(pos.x, pos.y, pos.z));
+        // На стороне Kotlin теперь должен быть object VModSchematicJavaHelper с такими методами.
         try {
             ServerShipHandle found = VModSchematicJavaHelper.findServerShip(level, BlockPos.containing(pos.x, pos.y, pos.z));
             LOGGER.info("[DockyardUpgrade] findServerShip returned: {}", found == null ? "null" : "id=" + found.getId());
@@ -183,29 +183,7 @@ public class DockyardUpgradeLogic {
         long getId();
     }
 
-    /**
-     * Вспомогательный класс для обращения к vmod API из Java.
-     * Должен быть реализован на стороне Kotlin и предоставлять статические методы:
-     * - findServerShip(ServerLevel, BlockPos): ServerShipHandle
-     * - saveShipToNBT(ServerLevel, ServerPlayer, UUID, ServerShipHandle, CompoundTag): boolean
-     * - spawnShipFromNBT(ServerLevel, ServerPlayer, UUID, Vec3, CompoundTag)
-     * - removeShip(ServerLevel, ServerShipHandle)
-     */
-    public static class VModSchematicJavaHelper {
-        public static ServerShipHandle findServerShip(ServerLevel level, BlockPos pos) {
-            throw new UnsupportedOperationException("Implement in Kotlin!");
-        }
-
-        public static boolean saveShipToNBT(ServerLevel level, ServerPlayer player, UUID uuid, ServerShipHandle ship, CompoundTag nbt) {
-            throw new UnsupportedOperationException("Implement in Kotlin!");
-        }
-
-        public static void spawnShipFromNBT(ServerLevel level, ServerPlayer player, UUID uuid, Vec3 pos, CompoundTag nbt) {
-            throw new UnsupportedOperationException("Implement in Kotlin!");
-        }
-
-        public static void removeShip(ServerLevel level, ServerShipHandle ship) {
-            throw new UnsupportedOperationException("Implement in Kotlin!");
-        }
-    }
+    // УДАЛЕНО: внутренний Java-класс VModSchematicJavaHelper, чтобы не было конфликтов!
+    // Теперь реализация должна быть только на стороне Kotlin:
+    // см. src/main/kotlin/com/zoritism/heavybullet/backpack/VModSchematicJavaHelper.kt
 }
