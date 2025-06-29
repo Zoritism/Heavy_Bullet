@@ -3,6 +3,7 @@ package com.zoritism.heavybullet.backpack;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.IUpgradeCountLimitConfig;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeItemBase;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeType;
+
 import java.util.Collections;
 import java.util.List;
 
