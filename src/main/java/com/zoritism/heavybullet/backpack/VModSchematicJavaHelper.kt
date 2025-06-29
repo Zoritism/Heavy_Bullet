@@ -7,7 +7,6 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.phys.Vec3
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.valkyrienskies.core.api.ships.ServerShip
 import java.util.UUID
 
 object VModSchematicJavaHelper {
@@ -17,7 +16,7 @@ object VModSchematicJavaHelper {
     fun findServerShip(level: ServerLevel, pos: BlockPos): DockyardUpgradeLogic.ServerShipHandle? {
         LOGGER.info("[VModSchematicJavaHelper] findServerShip called with pos=({}, {}, {}) in level={}", pos.x, pos.y, pos.z, level.dimension().location())
         try {
-            // Получаем Pipeline через reflection (как в BottleShip)
+            // 1. Получаем Pipeline
             val pipelineClass = Class.forName("org.valkyrienskies.mod.common.VSGameUtilsKt")
             val getVsPipeline = pipelineClass.getMethod("getVsPipeline", Class.forName("net.minecraft.server.MinecraftServer"))
             val pipeline = getVsPipeline.invoke(null, level.server)
@@ -25,16 +24,19 @@ object VModSchematicJavaHelper {
                 LOGGER.warn("[VModSchematicJavaHelper] VS pipeline is null!")
                 return null
             }
+            // 2. Получаем shipWorld
             val shipWorld = pipeline.javaClass.getMethod("getShipWorld").invoke(pipeline)
             if (shipWorld == null) {
                 LOGGER.warn("[VModSchematicJavaHelper] ShipWorld is null!")
                 return null
             }
+            // 3. Получаем все корабли
             val allShips = shipWorld.javaClass.getMethod("getAllShips").invoke(shipWorld) as? Iterable<*>
             if (allShips == null) {
                 LOGGER.warn("[VModSchematicJavaHelper] allShips is null or not iterable!")
                 return null
             }
+            // 4. Проверяем попадание в AABB каждого корабля
             val x = pos.x + 0.5
             val y = pos.y + 0.5
             val z = pos.z + 0.5
@@ -97,13 +99,11 @@ object VModSchematicJavaHelper {
     ) {
         LOGGER.info("[VModSchematicJavaHelper] spawnShipFromNBT called at pos ({}, {}, {}) for player={}", pos.x, pos.y, pos.z, player.gameProfile.name)
         // Нет публичного API для создания корабля из NBT/id в VS2.
-        // Оставлено пустым, как и в BottleShip.
     }
 
     @JvmStatic
     fun removeShip(level: ServerLevel, ship: DockyardUpgradeLogic.ServerShipHandle) {
         LOGGER.info("[VModSchematicJavaHelper] removeShip called for ship id={}", ship.getId())
         // Нет публичного API для удаления корабля по id/handle в VS2.
-        // Оставлено пустым, как и в BottleShip.
     }
 }
