@@ -35,10 +35,10 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     );
 
     // Настройки размеров и отступов
-    private static final int TAB_WIDTH = 176;   // Ширина всей вкладки в раскрытом виде
-    private static final int TAB_HEIGHT = 128;  // Высота вкладки в раскрытом виде
+    private static final int TAB_WIDTH = 176;   // Ширина вкладки в раскрытом виде
+    private static final int TAB_HEIGHT = 170;  // Увеличенная высота вкладки в раскрытом виде
 
-    private static final int CONTENT_OFFSET_X = 44; // Насколько всё смещено вправо (чтобы не накладывалось на иконку)
+    private static final int CONTENT_OFFSET_X = 44; // Смещение содержимого вправо
     private static final int BLOCK_WIDTH = 110;
     private static final int BLOCK_LINE_HEIGHT = 14;
     private static final int BLOCK_HEIGHT = BLOCK_LINE_HEIGHT * 2 + 6;
