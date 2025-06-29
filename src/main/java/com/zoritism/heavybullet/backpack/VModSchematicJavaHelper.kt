@@ -16,7 +16,6 @@ object VModSchematicJavaHelper {
     fun findServerShip(level: ServerLevel, pos: BlockPos): DockyardUpgradeLogic.ServerShipHandle? {
         LOGGER.info("[VModSchematicJavaHelper] findServerShip called with pos=({}, {}, {}) in level={}", pos.x, pos.y, pos.z, level.dimension().location())
         try {
-            // 1. Получаем Pipeline
             val pipelineClass = Class.forName("org.valkyrienskies.mod.common.VSGameUtilsKt")
             val getVsPipeline = pipelineClass.getMethod("getVsPipeline", Class.forName("net.minecraft.server.MinecraftServer"))
             val pipeline = getVsPipeline.invoke(null, level.server)
@@ -24,19 +23,16 @@ object VModSchematicJavaHelper {
                 LOGGER.warn("[VModSchematicJavaHelper] VS pipeline is null!")
                 return null
             }
-            // 2. Получаем shipWorld
             val shipWorld = pipeline.javaClass.getMethod("getShipWorld").invoke(pipeline)
             if (shipWorld == null) {
                 LOGGER.warn("[VModSchematicJavaHelper] ShipWorld is null!")
                 return null
             }
-            // 3. Получаем все корабли
             val allShips = shipWorld.javaClass.getMethod("getAllShips").invoke(shipWorld) as? Iterable<*>
             if (allShips == null) {
                 LOGGER.warn("[VModSchematicJavaHelper] allShips is null or not iterable!")
                 return null
             }
-            // 4. Проверяем попадание в AABB каждого корабля
             val x = pos.x + 0.5
             val y = pos.y + 0.5
             val z = pos.z + 0.5
@@ -104,6 +100,30 @@ object VModSchematicJavaHelper {
     @JvmStatic
     fun removeShip(level: ServerLevel, ship: DockyardUpgradeLogic.ServerShipHandle) {
         LOGGER.info("[VModSchematicJavaHelper] removeShip called for ship id={}", ship.getId())
-        // Нет публичного API для удаления корабля по id/handle в VS2.
+        try {
+            val serverShip = ship.getServerShip()
+            // Попробовать найти Teleport.teleportShip из BottleShip, если он есть в classpath
+            val teleportClass = try {
+                Class.forName("com.ForgeStove.bottle_ship.Teleport")
+            } catch (e: Exception) {
+                null
+            }
+            if (teleportClass != null) {
+                val teleportMethod = teleportClass.getMethod(
+                    "teleportShip",
+                    ServerLevel::class.java,
+                    serverShip.javaClass,
+                    Double::class.java,
+                    Double::class.java,
+                    Double::class.java
+                )
+                teleportMethod.invoke(null, level, serverShip, 0.0, -1000.0, 0.0)
+                LOGGER.info("[VModSchematicJavaHelper] Ship id={} teleported to void.", ship.getId())
+            } else {
+                LOGGER.warn("[VModSchematicJavaHelper] Teleport class not found, can't remove ship!")
+            }
+        } catch (e: Exception) {
+            LOGGER.error("[VModSchematicJavaHelper] Exception in removeShip: ", e)
+        }
     }
 }
