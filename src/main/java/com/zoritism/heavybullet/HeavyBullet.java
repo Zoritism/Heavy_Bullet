@@ -4,6 +4,7 @@ import com.zoritism.heavybullet.backpack.DockyardUpgradeContainer;
 import com.zoritism.heavybullet.backpack.DockyardUpgradeItem;
 import com.zoritism.heavybullet.backpack.DockyardUpgradeTab;
 import com.zoritism.heavybullet.backpack.DockyardUpgradeWrapper;
+import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
@@ -31,6 +32,9 @@ public class HeavyBullet {
         modEventBus.addListener(this::addCreative);
 
         ModItems.ITEMS.register(modEventBus);
+
+        // Register network packets before game world is loaded!
+        NetworkHandler.register();
     }
 
     private void addCreative(BuildCreativeModeTabContentsEvent event) {

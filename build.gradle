@@ -3,6 +3,7 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'org.jetbrains.kotlin.jvm' version '1.9.23'
 }
 
 version = mod_version
@@ -50,6 +51,13 @@ minecraft {
     }
 }
 
+sourceSets {
+    main {
+        java {
+            srcDirs += 'src/main/kotlin'
+        }
+    }
+}
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
@@ -58,6 +66,7 @@ repositories {
     maven { url = "https://www.cursemaven.com"
         content { includeGroup "curse.maven" }
     }
+    mavenCentral()
 }
 
 dependencies {
@@ -66,6 +75,15 @@ dependencies {
     implementation fg.deobf("curse.maven:sophisticated-backpacks-422301:6679415")
     implementation fg.deobf("curse.maven:sophisticated-core-618298:6680838")
     implementation fg.deobf("curse.maven:valkyrien-skies-258371:6510608")
+
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions.jvmTarget = "17"
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -110,8 +128,4 @@ publishing {
             url "file://${project.projectDir}/mcmodsrepo"
         }
     }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
 }
