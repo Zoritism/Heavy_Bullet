@@ -36,8 +36,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     // Настройки размеров и отступов
     private static final int TAB_WIDTH = 176;   // Ширина вкладки в раскрытом виде
-    private static final int TAB_HEIGHT = 256;  // Высота вкладки (для getHeight)
-    private static final int BODY_HEIGHT = 256; // Высота внутренней рамки для REI и содержимого
+    private static final int TAB_HEIGHT = 256;  // Высота вкладки в раскрытом виде
 
     private static final int CONTENT_OFFSET_X = 44; // Смещение содержимого вправо
     private static final int BLOCK_WIDTH = 110;
@@ -56,6 +55,9 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         super(upgradeContainer, position, screen,
                 Component.translatable("gui.heavybullet.dockyard.title"),
                 Component.translatable("gui.heavybullet.dockyard.tooltip"));
+        // ВАЖНО: Это и расширяет вкладку и саму рамку!
+        openTabDimension = new Dimension(TAB_WIDTH, TAB_HEIGHT);
+
         addHideableChild(
                 new ToggleButton<>(
                         new Position(x + 3, y + 24),
@@ -126,11 +128,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     @Override
     public int getHeight() {
         return isOpen ? TAB_HEIGHT : super.getHeight();
-    }
-
-    // Удалена аннотация @Override! Метод нужен для расширения области REI, даже если он не переопределяет
-    public int getBodyHeight() {
-        return isOpen ? BODY_HEIGHT : TAB_HEIGHT;
     }
 
     @Override
