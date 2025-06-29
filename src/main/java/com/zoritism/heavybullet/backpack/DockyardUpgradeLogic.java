@@ -2,15 +2,22 @@ package com.zoritism.heavybullet.backpack;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.valkyrienskies.core.api.ships.LoadedShip;
-import org.valkyrienskies.mod.common.VSGameUtilsKt;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.UUID;
+
+/**
+ * Логика бутылочного апгрейда с использованием vmod-схематики.
+ * Требует vmod и kotlin обёртку для вызова из Java!
+ */
 public class DockyardUpgradeLogic {
+
     /**
      * Обработка нажатия на кнопку "Bottle Ship"
      * @param player игрок
@@ -23,36 +30,38 @@ public class DockyardUpgradeLogic {
         if (release) {
             CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpack(backpack);
             if (shipNbt != null) {
-                // Восстановить корабль из NBT — зависит от вашей интеграции с VS или bottle_ship
                 spawnShipFromNbt(player, shipNbt);
                 DockyardDataHelper.clearShipFromBackpack(backpack);
-                player.displayClientMessage(Util.translatable("heavy_bullet.dockyard.ship_released"), true);
+                player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
             }
         } else {
-            // Навести прицелом на корабль, получить его
-            LoadedShip ship = findShipPlayerIsLookingAt(player, 100);
+            ServerShipHandle ship = findShipPlayerIsLookingAt(player, 100);
             if (ship != null) {
                 CompoundTag shipNbt = new CompoundTag();
-                // Сохраняем корабль в NBT (зависит от вашей интеграции с VS или bottle_ship)
-                saveShipToNbt(ship, shipNbt);
-                DockyardDataHelper.saveShipToBackpack(backpack, shipNbt);
-                // Удаляем корабль из мира
-                removeShipFromWorld(ship);
-                player.displayClientMessage(Util.translatable("heavy_bullet.dockyard.ship_stored"), true);
+                boolean result = saveShipToNbt(ship, shipNbt, player);
+                if (result) {
+                    DockyardDataHelper.saveShipToBackpack(backpack, shipNbt);
+                    removeShipFromWorld(ship, player);
+                    player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
+                } else {
+                    player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.save_failed"), true);
+                }
             }
         }
     }
 
-    // Получить рюкзак игрока. Реализуй под свою механику!
     private static ItemStack getBackpackFromPlayer(ServerPlayer player) {
         // Пример: рюкзак в главной руке
         ItemStack stack = player.getMainHandItem();
-        // Можно сделать проверку на твой предмет рюкзака
         return stack;
     }
 
-    // Поиск корабля, на который смотрит игрок (RayTrace)
-    private static LoadedShip findShipPlayerIsLookingAt(ServerPlayer player, double reach) {
+    /**
+     * Поиск корабля, на который смотрит игрок (raytrace).
+     * Возвращает ServerShipHandle - java-обёртка над ServerShip, реализованная в моде (требуется kotlin helper).
+     */
+    @Nullable
+    private static ServerShipHandle findShipPlayerIsLookingAt(ServerPlayer player, double reach) {
         Vec3 eye = player.getEyePosition(1.0F);
         Vec3 look = player.getLookAngle();
         Vec3 target = eye.add(look.x * reach, look.y * reach, look.z * reach);
@@ -60,31 +69,85 @@ public class DockyardUpgradeLogic {
                 eye, target, net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, player
         ));
 
+        if (hit == null) return null;
         Vec3 pos = hit.getLocation();
         ServerLevel level = player.serverLevel();
-        // Получить объект корабля по координате (VS API)
-        LoadedShip ship = VSGameUtilsKt.getShipObjectWorld(level).getShipObjectManagingPos(
-                BlockPos.containing(pos.x, pos.y, pos.z)
-        );
-        return ship;
+
+        // Требуется vmod helper для поиска корабля по позиции!
+        // Например: return VModSchematicJavaHelper.findServerShip(level, BlockPos.containing(pos.x, pos.y, pos.z));
+        return VModSchematicJavaHelper.findServerShip(level, BlockPos.containing(pos.x, pos.y, pos.z));
     }
 
-    // Сохраняем корабль в NBT (псевдокод, зависит от API bottle_ship/VS)
-    private static void saveShipToNbt(LoadedShip ship, CompoundTag nbt) {
-        // Здесь должна быть сериализация корабля (API bottle_ship или VS)
-        // Например: ship.save(nbt);
-        // Или вызов bottle_ship/BottleWithShipItem логики
+    /**
+     * Сохраняет корабль в NBT через vmod-схематику.
+     * @param ship ServerShipHandle (java-wrapper, должен содержать ссылку на ServerShip)
+     * @param nbt целевой CompoundTag
+     * @param player игрок (для сообщений об ошибках)
+     * @return true если успешно, иначе false
+     */
+    private static boolean saveShipToNbt(ServerShipHandle ship, CompoundTag nbt, ServerPlayer player) {
+        if (ship == null) return false;
+        ServerLevel level = player.serverLevel();
+        UUID uuid = UUID.randomUUID();
+
+        // Реальный вызов через kotlin helper
+        // return VModSchematicJavaHelper.saveShipToNBT(level, player, uuid, ship, nbt);
+        return VModSchematicJavaHelper.saveShipToNBT(level, player, uuid, ship, nbt);
     }
 
-    // Восстановить корабль из NBT (псевдокод)
+    /**
+     * Восстанавливает корабль из NBT через vmod-схематику (paste).
+     */
     private static void spawnShipFromNbt(ServerPlayer player, CompoundTag nbt) {
-        // Здесь должна быть десериализация и спавн корабля (API bottle_ship или VS)
-        // Например: Ship.spawnFromNbt(nbt, player.level(), player.position());
+        ServerLevel level = player.serverLevel();
+        UUID uuid = UUID.randomUUID();
+        Vec3 pos = player.position();
+        // Можно добавить выбор вращения и позиционирование
+
+        // Вызов через kotlin helper
+        VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, pos, nbt);
     }
 
-    // Удалить корабль из мира (псевдокод)
-    private static void removeShipFromWorld(LoadedShip ship) {
-        // Здесь должна быть корректная процедура удаления корабля
-        // Например: ship.remove();
+    /**
+     * Удаляет корабль из мира через vmod helper.
+     */
+    private static void removeShipFromWorld(ServerShipHandle ship, ServerPlayer player) {
+        if (ship == null) return;
+        ServerLevel level = player.serverLevel();
+        VModSchematicJavaHelper.removeShip(level, ship);
+    }
+
+    /**
+     * Java wrapper для ServerShip (требуется реализовать на стороне Kotlin в vmod).
+     */
+    public interface ServerShipHandle {
+        Object getServerShip(); // возвращает ServerShip из vmod/VS
+        long getId();
+    }
+
+    /**
+     * Вспомогательный класс для обращения к vmod API из Java.
+     * Должен быть реализован на стороне Kotlin и предоставлять статические методы:
+     * - findServerShip(ServerLevel, BlockPos): ServerShipHandle
+     * - saveShipToNBT(ServerLevel, ServerPlayer, UUID, ServerShipHandle, CompoundTag): boolean
+     * - spawnShipFromNBT(ServerLevel, ServerPlayer, UUID, Vec3, CompoundTag)
+     * - removeShip(ServerLevel, ServerShipHandle)
+     */
+    public static class VModSchematicJavaHelper {
+        public static ServerShipHandle findServerShip(ServerLevel level, BlockPos pos) {
+            throw new UnsupportedOperationException("Implement in Kotlin!");
+        }
+
+        public static boolean saveShipToNBT(ServerLevel level, ServerPlayer player, UUID uuid, ServerShipHandle ship, CompoundTag nbt) {
+            throw new UnsupportedOperationException("Implement in Kotlin!");
+        }
+
+        public static void spawnShipFromNBT(ServerLevel level, ServerPlayer player, UUID uuid, Vec3 pos, CompoundTag nbt) {
+            throw new UnsupportedOperationException("Implement in Kotlin!");
+        }
+
+        public static void removeShip(ServerLevel level, ServerShipHandle ship) {
+            throw new UnsupportedOperationException("Implement in Kotlin!");
+        }
     }
 }
