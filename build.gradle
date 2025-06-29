@@ -53,10 +53,18 @@ minecraft {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
+    maven { url = 'https://maven.minecraftforge.net/' }
+    flatDir { dirs 'libs' }
+    maven { url = "https://www.cursemaven.com"
+        content { includeGroup "curse.maven" }
+    }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    implementation fg.deobf("curse.maven:sophisticated-backpacks-422301:6679415")
+    implementation fg.deobf("curse.maven:sophisticated-core-618298:6680838")
 }
 
 tasks.named('processResources', ProcessResources).configure {
