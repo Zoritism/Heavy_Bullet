@@ -66,17 +66,8 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     private void drawLabelWithBox(GuiGraphics graphics, Position pos, Component text) {
         int w = 110, h = 12;
-        // Используем package-private методы для доступа к координатам
-        // (или protected, если класс наследуется от своего пакета)
-        // В SophisticatedCore Position есть методы left() и top()
-        int px, py;
-        try {
-            px = (int) Position.class.getMethod("left").invoke(pos);
-            py = (int) Position.class.getMethod("top").invoke(pos);
-        } catch (Exception e) {
-            throw new RuntimeException("Position does not have accessible left()/top() methods!");
-        }
-        graphics.fill(px, py, px + w, py + h, 0xFFAAAAAA);
-        graphics.drawString(Minecraft.getInstance().font, text, px + 4, py + 2, 0x404040, false);
+        // Для record Position(int x, int y) используем x() и y()
+        graphics.fill(pos.x(), pos.y(), pos.x() + w, pos.y() + h, 0xFFAAAAAA);
+        graphics.drawString(Minecraft.getInstance().font, text, pos.x() + 4, pos.y() + 2, 0x404040, false);
     }
 }
