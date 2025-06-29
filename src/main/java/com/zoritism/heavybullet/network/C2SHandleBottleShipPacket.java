@@ -1,5 +1,6 @@
 package com.zoritism.heavybullet.network;
 
+import com.zoritism.heavybullet.backpack.DockyardUpgradeLogic;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -22,8 +23,8 @@ public class C2SHandleBottleShipPacket {
 
     public static void handle(C2SHandleBottleShipPacket pkt, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            // TODO: Реализовать серверную логику захвата/выпуска корабля
-            // Например: DockyardUpgradeLogic.handleBottleShipClick(ctx.get().getSender(), pkt.release);
+            // Теперь вызываем серверную механику bottle-ship
+            DockyardUpgradeLogic.handleBottleShipClick(ctx.get().getSender(), pkt.release);
         });
         ctx.get().setPacketHandled(true);
     }

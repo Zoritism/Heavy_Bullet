@@ -1,5 +1,7 @@
 package com.zoritism.heavybullet.backpack;
 
+import com.zoritism.heavybullet.network.C2SHandleBottleShipPacket;
+import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -82,13 +84,18 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
         openTabDimension = new Dimension(TAB_WIDTH, TAB_HEIGHT);
 
+        // Левая кнопка (захват корабля)
         addHideableChild(new ToggleButton<>(
                 new Position(x + BUTTON1_X, y + BUTTONS_Y),
                 BUTTON_LEFT,
-                btn -> {},
+                btn -> {
+                    System.out.println("[DockyardUpgradeTab] Left button clicked (capture ship)"); // Клиентский лог
+                    NetworkHandler.CHANNEL.sendToServer(new C2SHandleBottleShipPacket(false));
+                },
                 () -> false
         ));
 
+        // Правая кнопка (пока без функции)
         addHideableChild(new ToggleButton<>(
                 new Position(x + BUTTON2_X, y + BUTTONS_Y),
                 BUTTON_RIGHT,
