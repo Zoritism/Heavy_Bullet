@@ -25,8 +25,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     @Override
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
-        // Реализуй механику тика, если требуется
+        // Здесь реализуй механику тика, если нужно
     }
-
-    // Добавь методы для DockyardUpgrade при необходимости
 }
