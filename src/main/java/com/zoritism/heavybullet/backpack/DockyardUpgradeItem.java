@@ -7,21 +7,20 @@ import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeType;
 import java.util.Collections;
 import java.util.List;
 
-public class DockyardUpgradeItem extends UpgradeItemBase {
-    private final UpgradeType<?> upgradeType;
+public class DockyardUpgradeItem extends UpgradeItemBase<DockyardUpgradeWrapper> {
+    private static final UpgradeType<DockyardUpgradeWrapper> TYPE = new UpgradeType<>(DockyardUpgradeWrapper::new);
 
-    public DockyardUpgradeItem(IUpgradeCountLimitConfig config, UpgradeType<?> upgradeType) {
+    public DockyardUpgradeItem(IUpgradeCountLimitConfig config) {
         super(config);
-        this.upgradeType = upgradeType;
     }
 
     @Override
-    public UpgradeType<?> getType() {
-        return upgradeType;
+    public UpgradeType<DockyardUpgradeWrapper> getType() {
+        return TYPE;
     }
 
     @Override
-    public List<UpgradeType<?>> getUpgradeConflicts() {
+    public List<UpgradeConflictDefinition> getUpgradeConflicts() {
         return Collections.emptyList();
     }
 }

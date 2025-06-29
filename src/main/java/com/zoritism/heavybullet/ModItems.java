@@ -8,14 +8,9 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.IUpgradeCountLimitConfig;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeGroup;
-import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeType;
 
 public class ModItems {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, "heavybullet");
-
-    public static final UpgradeType<?> DOCKYARD_UPGRADE_TYPE = new UpgradeType<>(
-            (storageWrapper, upgradeStack, upgradeSaveHandler) -> null
-    );
 
     public static final RegistryObject<Item> DOCKYARD_UPGRADE = ITEMS.register("dockyard_upgrade",
             () -> new DockyardUpgradeItem(
@@ -28,8 +23,7 @@ public class ModItems {
                         public int getMaxUpgradesInGroupPerStorage(String storageType, UpgradeGroup group) {
                             return 1;
                         }
-                    },
-                    DOCKYARD_UPGRADE_TYPE
+                    }
             )
     );
 }
