@@ -149,12 +149,20 @@ object VModSchematicJavaHelper {
             val sizeY = maxY - minY
             val sizeZ = maxZ - minZ
             val maxSide = max(max(sizeX, sizeY), sizeZ)
-            val safeDist = maxSide * 1.5
+            val spawnDist = (maxSide / 2.0) + 2.0 // половина корабля + 2 блока зазора
+
+            LOGGER.info("[VModSchematicJavaHelper] Ship AABB min=({}, {}, {}), max=({}, {}, {})", minX, minY, minZ, maxX, maxY, maxZ)
+            LOGGER.info("[VModSchematicJavaHelper] sizeX={}, sizeY={}, sizeZ={}, maxSide={}", sizeX, sizeY, sizeZ, maxSide)
+            LOGGER.info("[VModSchematicJavaHelper] Calculated spawnDist={}", spawnDist)
 
             // Вектор взгляда и raytrace
             val eyePos = player.eyePosition
-            val lookVec = player.lookAngle
-            val targetPos = eyePos.add(lookVec.x * safeDist, lookVec.y * safeDist, lookVec.z * safeDist)
+            val lookVec = player.lookAngle.normalize()
+            LOGGER.info("[VModSchematicJavaHelper] Player eyePos=({}, {}, {}), lookVec=({}, {}, {})", eyePos.x, eyePos.y, eyePos.z, lookVec.x, lookVec.y, lookVec.z)
+
+            val targetPos = eyePos.add(lookVec.x * spawnDist, lookVec.y * spawnDist, lookVec.z * spawnDist)
+            LOGGER.info("[VModSchematicJavaHelper] targetPos for raytrace=({}, {}, {})", targetPos.x, targetPos.y, targetPos.z)
+
             val context = net.minecraft.world.level.ClipContext(
                 eyePos, targetPos,
                 net.minecraft.world.level.ClipContext.Block.OUTLINE,
@@ -163,12 +171,13 @@ object VModSchematicJavaHelper {
             )
             val hit: HitResult = level.clip(context)
             if (hit.type != HitResult.Type.MISS) {
-                LOGGER.warn("[VModSchematicJavaHelper] Cannot spawn ship: path is blocked!")
+                LOGGER.warn("[VModSchematicJavaHelper] Cannot spawn ship: path is blocked! Hit at ({}, {}, {})", hit.location.x, hit.location.y, hit.location.z)
                 return false
             }
 
-            // Новая позиция — на safeDist от игрока по взгляду
-            val spawnPos = eyePos.add(lookVec.x * safeDist, lookVec.y * safeDist, lookVec.z * safeDist)
+            // Новая позиция — на spawnDist от глаз игрока по взгляду
+            val spawnPos = eyePos.add(lookVec.x * spawnDist, lookVec.y * spawnDist, lookVec.z * spawnDist)
+            LOGGER.info("[VModSchematicJavaHelper] Calculated spawnPos=({}, {}, {})", spawnPos.x, spawnPos.y, spawnPos.z)
 
             val serverShipClass = Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
             val teleportClass = try {
@@ -185,12 +194,14 @@ object VModSchematicJavaHelper {
                     java.lang.Double.TYPE,
                     java.lang.Double.TYPE
                 )
+                LOGGER.info("[VModSchematicJavaHelper] Invoking teleportShip with ({}, {}, {})", spawnPos.x, spawnPos.y, spawnPos.z)
                 teleportMethod.invoke(null, level, ship, spawnPos.x, spawnPos.y, spawnPos.z)
                 // Попробуем снять isStatic (если есть), чтобы корабль снова стал активным
                 try {
                     val isStaticField = serverShipClass.getDeclaredField("isStatic")
                     isStaticField.isAccessible = true
                     isStaticField.setBoolean(ship, false)
+                    LOGGER.info("[VModSchematicJavaHelper] Set isStatic=false for ship id={}", shipId)
                 } catch (e: Exception) {
                     LOGGER.warn("[VModSchematicJavaHelper] Could not set isStatic to false for ship id={}", shipId)
                 }
