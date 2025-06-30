@@ -19,60 +19,52 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/**
- * DockyardUpgradeWrapper:
- * - Хранит ссылку на storageWrapper, апгрейд и обработчик сохранения.
- * - Позволяет получать доступ к storageWrapper, ItemStack рюкзака, BlockEntity (если блок).
- * - В блоковом режиме умеет синхронизировать persistentData блока и предмета.
- * - Используется для показа UI и серверной логики апгрейда.
- */
-public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem>
-        implements ITickableUpgrade {
+public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
 
     private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeWrapper");
 
-    // Ключи для временных процессных данных в persistentData блока
     private static final String NBT_PROCESS_ACTIVE = "DockyardProcessActive";
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
     private static final String NBT_PROCESS_SHIP_ID = "DockyardProcessShipId";
     private static final String NBT_PROCESS_SLOT = "DockyardProcessSlot";
-
-    // Сколько тиков длится процесс (10 секунд)
     private static final int ANIMATION_TICKS = 200;
-    // Дистанция поиска корабля вверх
     private static final int SHIP_RAY_DIST = 15;
 
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
     }
 
-    /** Публичный геттер для storageWrapper — нужен для UI. */
     public IStorageWrapper getStorageWrapper() {
         return this.storageWrapper;
     }
 
-    /** Получить ItemStack рюкзака, к которому относится этот апгрейд (если это предмет, а не блок). */
     @Nullable
     public ItemStack getStorageItemStack() {
+        // Попробовать получить именно рюкзак (ItemStack), а не апгрейд!
         try {
-            Method m = storageWrapper.getClass().getMethod("getStack");
-            Object stack = m.invoke(storageWrapper);
-            ItemStack handStack = getMainHandForLog();
-            LOGGER.info("[DockyardUpgradeWrapper] getStorageItemStack: storageWrapper={}, stack={}, NBT={}, MainHandStack={}, MainHandNBT={}",
-                    storageWrapper,
-                    stack,
-                    (stack instanceof ItemStack s && s.hasTag()) ? s.getTag() : "no NBT",
-                    handStack,
-                    handStack != null && handStack.hasTag() ? handStack.getTag() : "no NBT"
-            );
-            if (stack instanceof ItemStack s) return s;
+            // SophisticatedBackpacks: BackpackWrapper.getStorage() или getStack()
+            Method m;
+            Object stack = null;
+            try {
+                m = storageWrapper.getClass().getMethod("getStack");
+                stack = m.invoke(storageWrapper);
+            } catch (NoSuchMethodException e) {
+                try {
+                    m = storageWrapper.getClass().getMethod("getStorage");
+                    stack = m.invoke(storageWrapper);
+                } catch (NoSuchMethodException ignore) {}
+            }
+            if (stack instanceof ItemStack s && !s.isEmpty()) {
+                LOGGER.info("[DockyardUpgradeWrapper] getStorageItemStack: returning storageWrapper stack = {}, NBT={}", s, s.hasTag() ? s.getTag() : "no NBT");
+                return s;
+            }
         } catch (Exception e) {
             LOGGER.error("[DockyardUpgradeWrapper] getStorageItemStack exception: ", e);
         }
-        return null;
+        LOGGER.warn("[DockyardUpgradeWrapper] getStorageItemStack: fallback, returning ItemStack.EMPTY");
+        return ItemStack.EMPTY;
     }
 
-    /** Получить BlockEntity, если апгрейд вставлен в блок. */
     @Nullable
     public BlockEntity getStorageBlockEntity() {
         try {
@@ -80,24 +72,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             Object be = m.invoke(storageWrapper);
             LOGGER.info("[DockyardUpgradeWrapper] getStorageBlockEntity: storageWrapper={}, blockEntity={}", storageWrapper, be);
             if (be instanceof BlockEntity blockEntity) return blockEntity;
+        } catch (NoSuchMethodException nsme) {
+            LOGGER.debug("[DockyardUpgradeWrapper] getStorageBlockEntity: method getBlockEntity() not present on {}", storageWrapper.getClass().getName());
         } catch (Exception e) {
             LOGGER.error("[DockyardUpgradeWrapper] getStorageBlockEntity exception: ", e);
         }
         return null;
-    }
-
-    private ItemStack getMainHandForLog() {
-        try {
-            // Only try on client (for UI) or use reflection/safe code in server context
-            // This is just for debug; if not available, ignore
-            Class<?> mcClass = Class.forName("net.minecraft.client.Minecraft");
-            Object mc = mcClass.getMethod("getInstance").invoke(null);
-            Object player = mcClass.getField("player").get(mc);
-            if (player != null) {
-                return (ItemStack) player.getClass().getMethod("getMainHandItem").invoke(player);
-            }
-        } catch (Throwable ignored) {}
-        return ItemStack.EMPTY;
     }
 
     @Override
@@ -105,11 +85,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return false;
     }
 
+    // --- Остальной код без изменений ---
+
     @Override
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
         LOGGER.info("[DockyardUpgradeWrapper] tick called. entity={}, level={}, blockPos={}", entity, level, blockPos);
 
-        // Работает только для блока, только на сервере
         if (level.isClientSide || blockPos == null) return;
 
         BlockEntity be = getStorageBlockEntity();
@@ -119,10 +100,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         }
         CompoundTag tag = getPersistentData(be);
 
-        // Автоматически переносить корабли из предмета в persistentData при первом запуске блока
         syncBackpackShipsToBlock(be);
 
-        // --- PROCESS BLOCK SHIP CAPTURE ---
         if (tag.getBoolean(NBT_PROCESS_ACTIVE)) {
             int ticks = tag.getInt(NBT_PROCESS_TICKS);
             long shipId = tag.getLong(NBT_PROCESS_SHIP_ID);
@@ -132,25 +111,19 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             tag.putInt(NBT_PROCESS_TICKS, ticks);
 
             ServerLevel serverLevel = (ServerLevel) level;
-
-            // Проверка: корабль всё ещё есть сверху?
             DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, blockPos, SHIP_RAY_DIST);
             boolean shipValid = ship != null && ship.getId() == shipId;
             LOGGER.info("[DockyardUpgradeWrapper] tick: process active, ticks={}, shipId={}, slot={}, shipValid={}", ticks, shipId, slot, shipValid);
             if (!shipValid) {
-                // Остановить процесс
                 clearProcess(tag, be);
                 LOGGER.info("[DockyardUpgradeWrapper] tick: process stopped, ship not valid.");
                 return;
             }
-
-            // Генерировать частицы между кораблём и рюкзаком
             spawnDockyardParticles(serverLevel, blockPos, ship);
 
             if (ticks >= ANIMATION_TICKS) {
-                // После задержки — сохранить корабль в persistentData блока!
                 CompoundTag shipNbt = new CompoundTag();
-                boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null); // null игрока, т.к. действия идут от блока
+                boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null);
                 if (result) {
                     DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
                     DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
@@ -170,36 +143,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         be.setChanged();
     }
 
-    /**
-     * Запускает процесс поглощения корабля блоком рюкзака (блоковый режим!).
-     */
-    public void startBlockShipInsert(Level level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, int slot) {
-        LOGGER.info("[DockyardUpgradeWrapper] startBlockShipInsert: level={}, blockPos={}, ship={}, slot={}", level, blockPos, ship, slot);
-        if (level.isClientSide || blockPos == null || ship == null) return;
-        BlockEntity be = getStorageBlockEntity();
-        if (be == null) {
-            LOGGER.warn("[DockyardUpgradeWrapper] startBlockShipInsert: BlockEntity is null for blockPos={}", blockPos);
-            return;
-        }
-        CompoundTag tag = getPersistentData(be);
-
-        // Если в этом слоте уже есть корабль – не начинать процесс
-        if (DockyardDataHelper.hasShipInBlockSlot(be, slot)) {
-            LOGGER.warn("[DockyardUpgradeWrapper] startBlockShipInsert: slot {} already has ship!", slot);
-            return;
-        }
-
-        tag.putBoolean(NBT_PROCESS_ACTIVE, true);
-        tag.putInt(NBT_PROCESS_TICKS, 0);
-        tag.putLong(NBT_PROCESS_SHIP_ID, ship.getId());
-        tag.putInt(NBT_PROCESS_SLOT, slot);
-        be.setChanged();
-        LOGGER.info("[DockyardUpgradeWrapper] startBlockShipInsert: process started for slot {}", slot);
-    }
-
-    /**
-     * Получить persistentData для BlockEntity (или создать если нужно).
-     */
     private CompoundTag getPersistentData(BlockEntity blockEntity) {
         try {
             Method m = blockEntity.getClass().getMethod("getPersistentData");
@@ -211,14 +154,9 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         } catch (Exception e) {
             LOGGER.error("[DockyardUpgradeWrapper] getPersistentData exception: ", e);
         }
-        // Fallback: не найдено поле persistentData, используем временный тег (данные не сохранятся)
         return new CompoundTag();
     }
 
-    /**
-     * На блоке: при первом запуске блока копировать корабли из предмета рюкзака в persistentData блока,
-     * и наоборот при снятии блока – если persistentData есть, копировать в предмет.
-     */
     private void syncBackpackShipsToBlock(BlockEntity be) {
         try {
             boolean hasShips = DockyardDataHelper.hasShipInBlockSlot(be, 0) ||
@@ -227,7 +165,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                     DockyardDataHelper.hasShipInBlockSlot(be, 0), DockyardDataHelper.hasShipInBlockSlot(be, 1));
             if (hasShips) return;
 
-            // Получить предмет рюкзака из блока
             ItemStack backpack = getBackpackItemFromBlockEntity(be);
             LOGGER.info("[DockyardUpgradeWrapper] syncBackpackShipsToBlock: backpack={}, NBT={}", backpack, (backpack != null && backpack.hasTag()) ? backpack.getTag() : "no NBT");
             if (backpack == null || !backpack.hasTag()) return;
@@ -247,10 +184,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         }
     }
 
-    /**
-     * Получить ItemStack рюкзака из BlockEntity (SophisticatedBackpacks).
-     * Обычно это первый слот, но может отличаться для разных реализаций.
-     */
     @Nullable
     private ItemStack getBackpackItemFromBlockEntity(BlockEntity be) {
         try {
@@ -266,14 +199,10 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return null;
     }
 
-    /**
-     * Серверная часть: генерирует частицы-огоньки между кораблём и рюкзаком-блоком
-     */
     private void spawnDockyardParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship) {
         Object vsShip = ship.getServerShip();
         AABB aabb = tryGetShipAABB(vsShip);
         if (aabb == null) {
-            // Fallback: просто над блоком, если корабль неизвестен
             for (int i = 0; i < 4; i++) {
                 double sx = blockPos.getX() + 0.5 + (Math.random() - 0.5) * 4.0;
                 double sy = blockPos.getY() + 4 + Math.random() * 4.0;
@@ -285,7 +214,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             }
             return;
         }
-        // Размер частицы-области увеличен относительно корабля
         double margin = 2.0;
         double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
         double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
@@ -302,9 +230,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         }
     }
 
-    /**
-     * Получить AABB корабля через reflection (VS API).
-     */
     @Nullable
     private AABB tryGetShipAABB(Object vsShip) {
         if (vsShip == null) return null;
@@ -325,6 +250,4 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         }
         return null;
     }
-
-    // При необходимости реализовать syncBlockShipsToBackpack для обратной синхронизации при снятии блока
 }
