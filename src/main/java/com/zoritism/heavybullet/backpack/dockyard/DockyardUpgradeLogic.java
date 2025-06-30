@@ -35,7 +35,7 @@ public class DockyardUpgradeLogic {
         ItemStack backpack = ItemStack.EMPTY;
         DockyardUpgradeWrapper wrapper = null;
 
-        // Получаем wrapper через рефлексию, чтобы избежать проблем с компилятором
+        // 1. Пробуем получить через GUI контейнер (DockyardUpgradeContainer)
         try {
             if (player != null && player.containerMenu != null) {
                 if (player.containerMenu.getClass().getName().equals("com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeContainer")) {
@@ -52,9 +52,31 @@ public class DockyardUpgradeLogic {
             LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
         }
 
+        // 2. Если не нашли через GUI — fallback на предмет в руке или в инвентаре
         if (backpack == null || backpack.isEmpty()) {
-            LOGGER.warn("[handleDockyardShipClick] No backpack found in opened GUI for player={}", player != null ? player.getName().getString() : "null");
-            player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
+            if (player != null) {
+                // main hand (если там рюкзак)
+                ItemStack hand = player.getMainHandItem();
+                if (hand != null && !hand.isEmpty() && stackHasDockyardUpgrade(hand)) {
+                    backpack = hand;
+                } else {
+                    // ищем рюкзак с апгрейдом в инвентаре
+                    for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+                        ItemStack stack = player.getInventory().getItem(i);
+                        if (stack != null && !stack.isEmpty() && stackHasDockyardUpgrade(stack)) {
+                            backpack = stack;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (backpack == null || backpack.isEmpty()) {
+            LOGGER.warn("[handleDockyardShipClick] No backpack found for player={}", player != null ? player.getName().getString() : "null");
+            if (player != null) {
+                player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
+            }
             return;
         }
 
@@ -108,6 +130,22 @@ public class DockyardUpgradeLogic {
             LOGGER.info("[handleDockyardShipClick] No ship found in sight");
             player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_found"), true);
         }
+    }
+
+    /**
+     * Проверяет, есть ли апгрейд дока у рюкзака (itemstack).
+     * Можно заменить на более точную проверку для своего апгрейда, если нужно.
+     */
+    private static boolean stackHasDockyardUpgrade(ItemStack stack) {
+        if (stack == null || !stack.hasTag()) return false;
+        CompoundTag tag = stack.getTag();
+        if (tag.contains("Upgrades")) {
+            CompoundTag upgrades = tag.getCompound("Upgrades");
+            if (upgrades.contains("heavybullet:dockyard_upgrade")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Nullable
