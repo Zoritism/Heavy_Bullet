@@ -24,7 +24,7 @@ import java.util.Map;
 
 /**
  * DockyardUpgradeTab:
- * - Всегда показывает актуальное содержимое как для блока, так и для предмета рюкзака.
+ * - Всегда показывает актуальное содержимое того рюкзака, который реально открыт (через контейнер), а не только в руке.
  * - В режиме блока использует persistentData блок-сущности, для предмета — NBT предмета.
  * - Кнопки корректно работают для сбора/выпуска корабля в каждом слоте.
  */
@@ -103,7 +103,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     }
 
     /**
-     * Получить источник данных: если открыт блок — BlockEntity, иначе ItemStack.
+     * Получить источник данных: если открыт блок — BlockEntity, иначе ItemStack (именно тот, который реально открыт в контейнере!).
      */
     private WrapperOrBlockData getDataSource() {
         try {
@@ -116,9 +116,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                 if (stack != null) return new WrapperOrBlockData(null, stack);
             }
         } catch (Exception ignored) {}
-        // Fallback: если нет контейнера — используем ItemStack из main hand (клиентский просмотр)
-        ItemStack handStack = getBackpack();
-        if (!handStack.isEmpty()) return new WrapperOrBlockData(null, handStack);
         return null;
     }
 
@@ -185,18 +182,10 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     }
 
     /**
-     * Получить рюкзак игрока (только для клиентского быстрого просмотра, если нет GUI-контейнера)
-     */
-    private ItemStack getBackpack() {
-        return Minecraft.getInstance().player != null ? Minecraft.getInstance().player.getMainHandItem() : ItemStack.EMPTY;
-    }
-
-    /**
      * Клик по кнопке: если слот пустой — подобрать (release=false), если есть корабль — выпустить (release=true)
      */
     private void handleSlotButtonClick(int slot) {
         boolean hasShip = hasShipInSlot(slot);
-        // Если пусто — собрать корабль (release=false), если есть — выпустить (release=true)
         NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
 
