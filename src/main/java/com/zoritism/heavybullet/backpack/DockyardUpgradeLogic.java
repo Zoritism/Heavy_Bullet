@@ -13,16 +13,29 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * Логика бутылочного апгрейда с использованием vmod-схематики.
+ * Логика докового апгрейда с использованием vmod-схематики.
  * Требует vmod и kotlin обёртку для вызова из Java!
  */
 public class DockyardUpgradeLogic {
 
     /**
-     * @param player игрок
-     * @param release true = выпуск, false = захват
+     * Старый API для одного слота (совместимость)
      */
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
+        handleDockyardShipClick(player, 0, release);
+    }
+
+    /**
+     * Новый API: универсальный обработчик для любого слота.
+     * @param player игрок
+     * @param slotIndex номер слота (0 или 1)
+     * @param release true = выпуск, false = захват
+     */
+    public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
+        // TODO: заменить на систему с двумя слотами!
+        // Пока реализовано только для одного слота (как было раньше)
+        // В дальнейшем здесь должна быть работа с NBT по slotIndex
+
         ItemStack backpack = getBackpackFromPlayer(player);
         if (backpack == null) {
             return;
