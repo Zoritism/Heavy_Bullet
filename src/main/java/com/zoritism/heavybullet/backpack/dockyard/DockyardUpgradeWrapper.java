@@ -3,7 +3,6 @@ package com.zoritism.heavybullet.backpack.dockyard;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -16,19 +15,12 @@ import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeWrapperBase;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
-import java.util.Random;
 import java.util.function.Consumer;
 
-/**
- * DockyardUpgradeWrapper:
- * - Исправлена работа с блоком (сохранение/чтение кораблей через DockyardDataHelper для блока)
- * - Добавлена задержка 10 секунд при запаковке корабля через блок
- * - В процессе задержки генерируются частицы-огоньки между кораблём и рюкзаком
- */
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem>
         implements ITickableUpgrade {
 
-    // Ключи для временных процессных данных в NBT блока
+    // Ключи для временных процессных данных в persistentData блока
     private static final String NBT_PROCESS_ACTIVE = "DockyardProcessActive";
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
     private static final String NBT_PROCESS_SHIP_ID = "DockyardProcessShipId";
@@ -50,11 +42,15 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     @Override
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
+        // Работает только для блока, только на сервере
         if (level.isClientSide || blockPos == null) return;
 
         BlockEntity be = getBlockEntityFromWrapper(this.storageWrapper);
         if (be == null) return;
-        CompoundTag tag = getOrCreateBlockNbt(be);
+        CompoundTag tag = getPersistentData(be);
+
+        // Автоматически переносить корабли из предмета в persistentData при первом запуске блока
+        syncBackpackShipsToBlock(be);
 
         // --- PROCESS BLOCK SHIP CAPTURE ---
         if (tag.getBoolean(NBT_PROCESS_ACTIVE)) {
@@ -80,7 +76,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             spawnDockyardParticles(serverLevel, blockPos, ship);
 
             if (ticks >= ANIMATION_TICKS) {
-                // После задержки — сохранить корабль в блок!
+                // После задержки — сохранить корабль в persistentData блока!
                 CompoundTag shipNbt = new CompoundTag();
                 boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null); // null игрока, т.к. действия идут от блока
                 if (result) {
@@ -107,7 +103,10 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         if (level.isClientSide || blockPos == null || ship == null) return;
         BlockEntity be = getBlockEntityFromWrapper(this.storageWrapper);
         if (be == null) return;
-        CompoundTag tag = getOrCreateBlockNbt(be);
+        CompoundTag tag = getPersistentData(be);
+
+        // Если в этом слоте уже есть корабль – не начинать процесс
+        if (DockyardDataHelper.hasShipInBlockSlot(be, slot)) return;
 
         tag.putBoolean(NBT_PROCESS_ACTIVE, true);
         tag.putInt(NBT_PROCESS_TICKS, 0);
@@ -134,9 +133,9 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     /**
-     * Возвращает или создаёт NBT persistentData блока рюкзака.
+     * Получить persistentData для BlockEntity (или создать если нужно).
      */
-    private CompoundTag getOrCreateBlockNbt(BlockEntity blockEntity) {
+    private CompoundTag getPersistentData(BlockEntity blockEntity) {
         try {
             Method m = blockEntity.getClass().getMethod("getPersistentData");
             Object result = m.invoke(blockEntity);
@@ -146,6 +145,49 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         } catch (Exception ignored) {}
         // Fallback: не найдено поле persistentData, используем временный тег (данные не сохранятся)
         return new CompoundTag();
+    }
+
+    /**
+     * На блоке: при первом запуске блока копировать корабли из предмета рюкзака в persistentData блока,
+     * и наоборот при снятии блока – если persistentData есть, копировать в предмет.
+     */
+    private void syncBackpackShipsToBlock(BlockEntity be) {
+        try {
+            // Если persistentData уже заполнен – ничего не делаем
+            boolean hasShips = DockyardDataHelper.hasShipInBlockSlot(be, 0) ||
+                    DockyardDataHelper.hasShipInBlockSlot(be, 1);
+            if (hasShips) return;
+
+            // Получить предмет рюкзака из блока
+            ItemStack backpack = getBackpackItemFromBlockEntity(be);
+            if (backpack == null || !backpack.hasTag()) return;
+
+            for (int slot = 0; slot <= 1; slot++) {
+                if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slot)) {
+                    CompoundTag ship = DockyardDataHelper.getShipFromBackpackSlot(backpack, slot);
+                    if (ship != null) {
+                        DockyardDataHelper.saveShipToBlockSlot(be, ship, slot);
+                        DockyardDataHelper.clearShipFromBackpackSlot(backpack, slot);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * Получить ItemStack рюкзака из BlockEntity (SophisticatedBackpacks).
+     * Обычно это первый слот, но может отличаться для разных реализаций.
+     */
+    @Nullable
+    private ItemStack getBackpackItemFromBlockEntity(BlockEntity be) {
+        try {
+            var method = be.getClass().getMethod("getItem", int.class);
+            Object result = method.invoke(be, 0);
+            if (result instanceof ItemStack stack) {
+                return stack;
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     /**
@@ -204,4 +246,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         } catch (Exception ignored) {}
         return null;
     }
+
+    // При необходимости реализовать syncBlockShipsToBackpack для обратной синхронизации при снятии блока
 }
