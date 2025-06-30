@@ -21,12 +21,13 @@ import java.util.Map;
 
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
 
-    private static final int TAB_WIDTH = 103;
+    // Умеренно увеличенная ширина вкладки для более длинных названий корабля
+    private static final int TAB_WIDTH = 118;
     private static final int TAB_HEIGHT = 92;
     private static final int BODY_HEIGHT = 92;
 
-    // Поле чуть короче, как у AnvilUpgradeTab (84x16)
-    private static final int FIELD_WIDTH = 84;
+    // Более широкое поле для имени корабля, но не максимальное
+    private static final int FIELD_WIDTH = 94;
     private static final int FIELD_HEIGHT = 16;
 
     private static final TextureBlitData FIELD_ACTIVE = new TextureBlitData(
@@ -36,17 +37,17 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             GuiHelper.GUI_CONTROLS, Dimension.SQUARE_256, new UV(28, 115), new Dimension(FIELD_WIDTH, FIELD_HEIGHT)
     );
 
-    // Кнопка: синяя если слот пустой, оранжевая если в слоте корабль
+    // Кнопка: синяя если слот пустой, оранжевая если в слоте корабль (занятая кнопка сдвинута влево по атласу)
     private static final ButtonDefinition.Toggle<Boolean> SLOT_BUTTON = ButtonDefinitions.createToggleButtonDefinition(
             Map.of(
                     false, GuiHelper.getButtonStateData(
-                            new UV(144, 48),
+                            new UV(144, 48), // синяя (пусто)
                             "",
                             Dimension.SQUARE_16,
                             new Position(1, 1)
                     ),
                     true, GuiHelper.getButtonStateData(
-                            new UV(128, 48),
+                            new UV(112, 48), // оранжевая (занято), смещена на одну иконку влево относительно стандартной
                             "",
                             Dimension.SQUARE_16,
                             new Position(1, 1)
@@ -54,14 +55,18 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             )
     );
 
-    // Позиции оставляем как в старом интерфейсе
-    private static final int FIELD_X = 5;
-    private static final int FIELD1_Y = 25;
-    private static final int FIELD2_Y = FIELD1_Y + 18;
+    // Смещение всех элементов чуть левее (на 4 пикселя)
+    private static final int SHIFT_X = -4;
 
-    private static final int BUTTON1_X = 5;
-    private static final int BUTTON2_X = 5 + 20;
-    private static final int BUTTONS_Y = FIELD2_Y + 24;
+    // Расположение полей и кнопок: поля идут слева, кнопки сразу справа без отступа
+    private static final int FIELD_X = 10 + SHIFT_X;
+    private static final int FIELD1_Y = 25;
+    private static final int FIELD2_Y = FIELD1_Y + 22;
+
+    // Кнопки сразу справа от поля (FIELD_X + FIELD_WIDTH), по центру поля по вертикали
+    private static final int BUTTON_X = FIELD_X + FIELD_WIDTH;
+    private static final int BUTTON1_Y = FIELD1_Y + (FIELD_HEIGHT / 2) - 8;
+    private static final int BUTTON2_Y = FIELD2_Y + (FIELD_HEIGHT / 2) - 8;
 
     public DockyardUpgradeTab(DockyardUpgradeContainer upgradeContainer, Position position, StorageScreenBase<?> screen) {
         super(upgradeContainer, position, screen,
@@ -70,17 +75,17 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
         openTabDimension = new Dimension(TAB_WIDTH, TAB_HEIGHT);
 
-        // Кнопка для первого слота (слот 0)
+        // Верхняя кнопка для первого слота (слот 0)
         addHideableChild(new ToggleButton<>(
-                new Position(x + BUTTON1_X, y + BUTTONS_Y),
+                new Position(x + BUTTON_X, y + BUTTON1_Y),
                 SLOT_BUTTON,
                 btn -> handleSlotButtonClick(0),
                 () -> hasShipInSlot(0)
         ));
 
-        // Кнопка для второго слота (слот 1)
+        // Нижняя кнопка для второго слота (слот 1)
         addHideableChild(new ToggleButton<>(
-                new Position(x + BUTTON2_X, y + BUTTONS_Y),
+                new Position(x + BUTTON_X, y + BUTTON2_Y),
                 SLOT_BUTTON,
                 btn -> handleSlotButtonClick(1),
                 () -> hasShipInSlot(1)
@@ -94,7 +99,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             return false;
         }
         CompoundTag tag = backpack.getTag();
-        // Для двух слотов: DockyardStoredShip (для 0), DockyardStoredShip1 (для 1)
         String key = slot == 0 ? "DockyardStoredShip" : "DockyardStoredShip" + slot;
         return tag.contains(key);
     }
