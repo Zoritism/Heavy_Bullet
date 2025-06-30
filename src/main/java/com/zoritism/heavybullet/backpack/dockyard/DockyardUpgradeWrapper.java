@@ -17,6 +17,13 @@ import org.jetbrains.annotations.Nullable;
 import java.lang.reflect.Method;
 import java.util.function.Consumer;
 
+/**
+ * DockyardUpgradeWrapper:
+ * - Хранит ссылку на storageWrapper, апгрейд и обработчик сохранения.
+ * - Позволяет получать доступ к storageWrapper, ItemStack рюкзака, BlockEntity (если блок).
+ * - В блоковом режиме умеет синхронизировать persistentData блока и предмета.
+ * - Используется для показа UI и серверной логики апгрейда.
+ */
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem>
         implements ITickableUpgrade {
 
@@ -35,9 +42,31 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         super(storageWrapper, upgrade, upgradeSaveHandler);
     }
 
-    // Публичный геттер для storageWrapper, чтобы обеспечить доступ из других пакетов
+    /** Публичный геттер для storageWrapper — нужен для UI. */
     public IStorageWrapper getStorageWrapper() {
         return this.storageWrapper;
+    }
+
+    /** Получить ItemStack рюкзака, к которому относится этот апгрейд (если это предмет, а не блок). */
+    @Nullable
+    public ItemStack getStorageItemStack() {
+        try {
+            Method m = storageWrapper.getClass().getMethod("getStack");
+            Object stack = m.invoke(storageWrapper);
+            if (stack instanceof ItemStack s) return s;
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    /** Получить BlockEntity, если апгрейд вставлен в блок. */
+    @Nullable
+    public BlockEntity getStorageBlockEntity() {
+        try {
+            Method m = storageWrapper.getClass().getMethod("getBlockEntity");
+            Object be = m.invoke(storageWrapper);
+            if (be instanceof BlockEntity blockEntity) return blockEntity;
+        } catch (Exception ignored) {}
+        return null;
     }
 
     @Override
@@ -50,7 +79,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         // Работает только для блока, только на сервере
         if (level.isClientSide || blockPos == null) return;
 
-        BlockEntity be = getBlockEntityFromWrapper(this.storageWrapper);
+        BlockEntity be = getStorageBlockEntity();
         if (be == null) return;
         CompoundTag tag = getPersistentData(be);
 
@@ -106,7 +135,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
      */
     public void startBlockShipInsert(Level level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, int slot) {
         if (level.isClientSide || blockPos == null || ship == null) return;
-        BlockEntity be = getBlockEntityFromWrapper(this.storageWrapper);
+        BlockEntity be = getStorageBlockEntity();
         if (be == null) return;
         CompoundTag tag = getPersistentData(be);
 
@@ -118,23 +147,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         tag.putLong(NBT_PROCESS_SHIP_ID, ship.getId());
         tag.putInt(NBT_PROCESS_SLOT, slot);
         be.setChanged();
-    }
-
-    /**
-     * Получить BlockEntity из IStorageWrapper (SophisticatedBackpacks/Forge).
-     * Использует рефлексию для совместимости между версиями.
-     */
-    @Nullable
-    private BlockEntity getBlockEntityFromWrapper(IStorageWrapper wrapper) {
-        if (wrapper == null) return null;
-        try {
-            var method = wrapper.getClass().getMethod("getBlockEntity");
-            Object beObj = method.invoke(wrapper);
-            if (beObj instanceof BlockEntity blockEntity) {
-                return blockEntity;
-            }
-        } catch (Exception ignored) {}
-        return null;
     }
 
     /**
