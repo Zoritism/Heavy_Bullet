@@ -61,7 +61,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         } catch (Exception e) {
             LOGGER.error("[DockyardUpgradeWrapper] getStorageItemStack exception: ", e);
         }
-        LOGGER.warn("[DockyardUpgradeWrapper] getStorageItemStack: fallback, returning ItemStack.EMPTY");
+        // Не пиши WARN, если это предмет — это штатно!
         return ItemStack.EMPTY;
     }
 
@@ -95,7 +95,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         BlockEntity be = getStorageBlockEntity();
         if (be == null) {
-            LOGGER.warn("[DockyardUpgradeWrapper] tick: BlockEntity is null for blockPos={}", blockPos);
+            // Не пиши WARN, это штатно если апгрейд стоит в предметном рюкзаке!
             return;
         }
         CompoundTag tag = getPersistentData(be);

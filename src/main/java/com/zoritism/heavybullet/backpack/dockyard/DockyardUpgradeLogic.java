@@ -38,7 +38,8 @@ public class DockyardUpgradeLogic {
         // 1. Пробуем получить через GUI контейнер (DockyardUpgradeContainer)
         try {
             if (player != null && player.containerMenu != null) {
-                if (player.containerMenu.getClass().getName().equals("com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeContainer")) {
+                if (player.containerMenu.getClass().getName()
+                        .equals("com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeContainer")) {
                     Object container = player.containerMenu;
                     java.lang.reflect.Method m = container.getClass().getMethod("getUpgradeWrapper");
                     Object w = m.invoke(container);
@@ -52,7 +53,7 @@ public class DockyardUpgradeLogic {
             LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
         }
 
-        // 2. Если не нашли через GUI — fallback на предмет в руке или в инвентаре
+        // 2. Если не нашли через GUI — ищем рюкзак с апгрейдом в руке или инвентаре
         if (backpack == null || backpack.isEmpty()) {
             if (player != null) {
                 // main hand (если там рюкзак)
