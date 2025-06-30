@@ -243,7 +243,6 @@ object VModSchematicJavaHelper {
             val actualDist = eyePos.distanceTo(targetPos)
             var finalSpawnDist = spawnDist
             if (actualDist > maxAllowedDist) {
-                // Смещаем spawnDist на границу 500 блоков
                 finalSpawnDist = maxAllowedDist
                 targetPos = eyePos.add(lookVec.x * finalSpawnDist, lookVec.y * finalSpawnDist, lookVec.z * finalSpawnDist)
             }
@@ -260,8 +259,14 @@ object VModSchematicJavaHelper {
                 return false
             }
 
-            // Новая позиция — по направлению взгляда на расстоянии finalSpawnDist
-            val spawnPos = eyePos.add(lookVec.x * finalSpawnDist, lookVec.y * finalSpawnDist, lookVec.z * finalSpawnDist)
+            // Новая позиция — финальная, по направлению взгляда на расстоянии finalSpawnDist,
+            // но по вертикали поднята на половину высоты корабля
+            val halfShipHeight = (maxY - minY) / 2.0
+            val spawnPos = Vec3(
+                eyePos.x + lookVec.x * finalSpawnDist,
+                eyePos.y + lookVec.y * finalSpawnDist + halfShipHeight,
+                eyePos.z + lookVec.z * finalSpawnDist
+            )
 
             val serverShipClass = Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
             val teleportClass = try {
