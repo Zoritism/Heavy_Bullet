@@ -68,6 +68,9 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     private static final int BUTTON2_X = FIELD2_X + FIELD_WIDTH + 4;
     private static final int BUTTON2_Y = FIELD2_Y;
 
+    private ToggleButton<Boolean> btn1;
+    private ToggleButton<Boolean> btn2;
+
     public DockyardUpgradeTab(DockyardUpgradeContainer upgradeContainer, Position position, StorageScreenBase<?> screen) {
         super(upgradeContainer, position, screen,
                 Component.translatable("gui.heavybullet.dockyard.title"),
@@ -76,36 +79,45 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         openTabDimension = new Dimension(TAB_WIDTH, TAB_HEIGHT);
 
         // Левая кнопка (Слот 1)
-        addHideableChild(new ToggleButton<>(
+        btn1 = new ToggleButton<>(
                 new Position(x + BUTTON1_X, y + BUTTON1_Y),
                 SLOT_BUTTON,
-                btn -> handleSlotButtonClick(0),
+                btn -> {
+                    LOGGER.info("[DockyardUpgradeTab] Кнопка slot=0 нажата!");
+                    Minecraft.getInstance().player.sendSystemMessage(Component.literal("Click: slot=0"));
+                    handleSlotButtonClick(0);
+                },
                 () -> hasShipInSlot(0)
-        ));
+        );
+        addHideableChild(btn1);
 
         // Правая кнопка (Слот 2)
-        addHideableChild(new ToggleButton<>(
+        btn2 = new ToggleButton<>(
                 new Position(x + BUTTON2_X, y + BUTTON2_Y),
                 SLOT_BUTTON,
-                btn -> handleSlotButtonClick(1),
+                btn -> {
+                    LOGGER.info("[DockyardUpgradeTab] Кнопка slot=1 нажата!");
+                    Minecraft.getInstance().player.sendSystemMessage(Component.literal("Click: slot=1"));
+                    handleSlotButtonClick(1);
+                },
                 () -> hasShipInSlot(1)
-        ));
+        );
+        addHideableChild(btn2);
     }
 
-    // Проверка: есть ли корабль в слоте (заполнить из логики контейнера!)
+    // Проверка: есть ли корабль в слоте (заполнить из логики контейнера/апгрейда!)
     private boolean hasShipInSlot(int slot) {
         // TODO: заменить на логику проверки в контейнере/апгрейде
-        boolean result = getStoredShipName(slot) != null;
-        LOGGER.debug("[hasShipInSlot] slot={}, result={}", slot, result);
-        return result;
+        return getStoredShipName(slot) != null;
     }
 
-    // Получить название корабля для слота (заполнить из логики контейнера!)
+    // Получить название корабля для слота (заполнить из логики контейнера/апгрейда!)
     private String getStoredShipName(int slot) {
         // TODO: получить название корабля по слоту из контейнера/апгрейда (например, через wrapper или напрямую)
-        // Вот пример заглушки:
-        // return slot == 0 ? "wrestler-hunger-health" : null;
-        LOGGER.debug("[getStoredShipName] slot={} (STUB: always null)", slot);
+        // Для теста: всегда возвращаем строку для первого слота, чтобы проверить работоспособность UI/кнопки
+        if (slot == 0) {
+            return "TEST_SHIP";
+        }
         return null;
     }
 
