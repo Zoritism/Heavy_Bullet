@@ -170,6 +170,14 @@ public class DockyardUpgradeLogic {
         }
     }
 
+    // --- Публичные обертки для доступа из других классов ---
+    public static boolean saveShipToNbtPublic(ServerShipHandle ship, CompoundTag nbt, ServerPlayer player) {
+        return saveShipToNbt(ship, nbt, player);
+    }
+    public static boolean removeShipFromWorldPublic(ServerShipHandle ship, ServerPlayer player) {
+        return removeShipFromWorld(ship, player);
+    }
+
     /**
      * Восстанавливает корабль из NBT через vmod-схематику (paste).
      * @return true если успешно, иначе false
@@ -219,4 +227,53 @@ public class DockyardUpgradeLogic {
 
     // Реализация object VModSchematicJavaHelper только на стороне Kotlin:
     // см. src/main/kotlin/com/zoritism/heavybullet/backpack/VModSchematicJavaHelper.kt
+
+    // ----------- NEW LOGIC FOR BLOCK MODE -----------
+
+    /**
+     * Поиск корабля строго вертикальным рейкастом вверх от блока рюкзака.
+     * @param level серверный уровень
+     * @param blockPos позиция блока рюкзака (BlockPos)
+     * @param maxDistance максимальная дистанция вверх (например, 15)
+     * @return ServerShipHandle если найден, иначе null
+     */
+    @Nullable
+    public static ServerShipHandle findShipAboveBlock(ServerLevel level, BlockPos blockPos, double maxDistance) {
+        Vec3 from = new Vec3(blockPos.getX() + 0.5, blockPos.getY() + 1.2, blockPos.getZ() + 0.5); // чуть выше центра блока
+        int steps = (int) Math.ceil(maxDistance);
+        for (int i = 0; i <= steps; i++) {
+            int y = (int) (from.y + i);
+            BlockPos pos = new BlockPos((int) from.x, y, (int) from.z);
+            ServerShipHandle ship = null;
+            try {
+                ship = VModSchematicJavaHelper.findServerShip(level, pos);
+            } catch (Throwable t) {
+                LOGGER.error("[findShipAboveBlock] Exception at pos {}: {}", pos, t);
+            }
+            if (ship != null) {
+                LOGGER.info("[findShipAboveBlock] Found ship at {}", pos);
+                return ship;
+            }
+        }
+        LOGGER.info("[findShipAboveBlock] No ship found above block at {}", blockPos);
+        return null;
+    }
+
+    /**
+     * Запуск процесса задержанного "засовывания" корабля в рюкзак-блок.
+     * ВНИМАНИЕ: это только базовый каркас, нужно интегрировать в тики апгрейда!
+     * @param level серверный уровень
+     * @param blockPos позиция блока рюкзака
+     * @param slotIndex индекс слота для корабля
+     */
+    public static void startBlockShipInsert(ServerLevel level, BlockPos blockPos, int slotIndex) {
+        // Пример: сохраняем в NBT блока рюкзака "идёт процесс захвата", текущее время, id корабля, слота и т.д.
+        // В тиках блока или апгрейда проверять процесс и завершать по таймеру/условиям
+
+        // TODO: Получить BlockEntity рюкзака, записать временные флаги
+        // TODO: Запустить анимацию (частицы) и каждую секунду/тик делать проверку наличия корабля над блоком
+
+        // Это только пример вывода:
+        LOGGER.info("[startBlockShipInsert] Ship insert process STARTED at {} for slot {}", blockPos, slotIndex);
+    }
 }
