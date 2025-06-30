@@ -6,35 +6,25 @@ import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import java.util.UUID
 import kotlin.math.max
 
 object VModSchematicJavaHelper {
-    private val LOGGER: Logger = LoggerFactory.getLogger(VModSchematicJavaHelper::class.java)
 
+    /**
+     * Поиск корабля по позиции.
+     * @return ServerShipHandle если найден, иначе null.
+     */
     @JvmStatic
     fun findServerShip(level: ServerLevel, pos: BlockPos): DockyardUpgradeLogic.ServerShipHandle? {
-        LOGGER.info("[VModSchematicJavaHelper] findServerShip called with pos=({}, {}, {}) in level={}", pos.x, pos.y, pos.z, level.dimension().location())
-        try {
+        return try {
             val pipelineClass = Class.forName("org.valkyrienskies.mod.common.VSGameUtilsKt")
             val getVsPipeline = pipelineClass.getMethod("getVsPipeline", Class.forName("net.minecraft.server.MinecraftServer"))
             val pipeline = getVsPipeline.invoke(null, level.server)
-            if (pipeline == null) {
-                LOGGER.warn("[VModSchematicJavaHelper] VS pipeline is null!")
-                return null
-            }
+            if (pipeline == null) return null
             val shipWorld = pipeline.javaClass.getMethod("getShipWorld").invoke(pipeline)
-            if (shipWorld == null) {
-                LOGGER.warn("[VModSchematicJavaHelper] ShipWorld is null!")
-                return null
-            }
-            val allShips = shipWorld.javaClass.getMethod("getAllShips").invoke(shipWorld) as? Iterable<*>
-            if (allShips == null) {
-                LOGGER.warn("[VModSchematicJavaHelper] allShips is null or not iterable!")
-                return null
-            }
+            if (shipWorld == null) return null
+            val allShips = shipWorld.javaClass.getMethod("getAllShips").invoke(shipWorld) as? Iterable<*> ?: return null
             val x = pos.x + 0.5
             val y = pos.y + 0.5
             val z = pos.z + 0.5
@@ -50,7 +40,6 @@ object VModSchematicJavaHelper {
                     val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
                     if (x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ) {
                         val id = ship.javaClass.getMethod("getId").invoke(ship) as Long
-                        LOGGER.info("[VModSchematicJavaHelper] Ship found at pos ({}, {}, {}) with id={}", x, y, z, id)
                         return object : DockyardUpgradeLogic.ServerShipHandle {
                             override fun getServerShip(): Any = ship
                             override fun getId(): Long = id
@@ -58,14 +47,77 @@ object VModSchematicJavaHelper {
                     }
                 }
             }
-            LOGGER.info("[VModSchematicJavaHelper] No ship found at pos ({}, {}, {})", x, y, z)
-            return null
+            null
         } catch (e: Exception) {
-            LOGGER.error("[VModSchematicJavaHelper] Exception in findServerShip: ", e)
-            return null
+            null
         }
     }
 
+    /**
+     * Сохранить корабль в NBT (забрать в рюкзак)
+     * @return true если успешно, иначе false
+     */
+    @JvmStatic
+    fun tryStoreShipToBackpack(
+        level: ServerLevel,
+        player: ServerPlayer,
+        backpack: net.minecraft.world.item.ItemStack,
+        uuid: UUID,
+        ship: DockyardUpgradeLogic.ServerShipHandle,
+        nbt: CompoundTag
+    ): Boolean {
+        // Не даём забирать корабль если в рюкзаке уже есть другой
+        if (com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
+            return false
+        }
+
+        // Проверяем расстояние до игрока (максимум 4 блока)
+        val playerPos = player.eyePosition
+        val shipObj = ship.getServerShip()
+        val aabb = try { shipObj.javaClass.getMethod("getWorldAABB").invoke(shipObj) } catch (_: Exception) { null }
+        if (aabb != null) {
+            val minX = aabb.javaClass.getMethod("minX").invoke(aabb) as Double
+            val maxX = aabb.javaClass.getMethod("maxX").invoke(aabb) as Double
+            val minY = aabb.javaClass.getMethod("minY").invoke(aabb) as Double
+            val maxY = aabb.javaClass.getMethod("maxY").invoke(aabb) as Double
+            val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
+            val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
+            val center = Vec3((minX + maxX) / 2.0, (minY + maxY) / 2.0, (minZ + maxZ) / 2.0)
+            // Реально ближайшее расстояние до бокса, а не центра
+            val dx = maxOf(minX - playerPos.x, 0.0, playerPos.x - maxX)
+            val dy = maxOf(minY - playerPos.y, 0.0, playerPos.y - maxY)
+            val dz = maxOf(minZ - playerPos.z, 0.0, playerPos.z - maxZ)
+            val dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+            if (dist > 4.0) {
+                return false
+            }
+        }
+
+        // Сохраняем в NBT
+        val saveResult = saveShipToNBT(level, player, uuid, ship, nbt)
+        if (!saveResult) return false
+
+        // Только если успешно — сохраняем в рюкзак
+        com.zoritism.heavybullet.backpack.DockyardDataHelper.saveShipToBackpack(backpack, nbt)
+
+        // Удаляем из мира, если только что успешно сохранили в NBT и записали в рюкзак
+        val removeResult = try {
+            removeShip(level, ship)
+            true
+        } catch (_: Exception) {
+            // Если не удалили — очищаем NBT в рюкзаке, чтобы не было дюпа
+            com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
+            false
+        }
+        if (!removeResult) return false
+
+        return true
+    }
+
+    /**
+     * Сохранить корабль в NBT без проверки состояния рюкзака и расстояния.
+     * Используется только внутренне!
+     */
     @JvmStatic
     fun saveShipToNBT(
         level: ServerLevel,
@@ -74,19 +126,63 @@ object VModSchematicJavaHelper {
         ship: DockyardUpgradeLogic.ServerShipHandle,
         nbt: CompoundTag
     ): Boolean {
-        LOGGER.info("[VModSchematicJavaHelper] saveShipToNBT called for player={} uuid={}", player.gameProfile.name, uuid)
-        try {
+        return try {
             val serverShip = ship.getServerShip()
             val id = serverShip.javaClass.getMethod("getId").invoke(serverShip) as Long
             nbt.putLong("vs_ship_id", id)
-            LOGGER.info("[VModSchematicJavaHelper] Saved ship id={} to NBT", id)
-            return true
+            true
         } catch (e: Exception) {
-            LOGGER.error("[VModSchematicJavaHelper] Exception in saveShipToNBT: ", e)
-            return false
+            false
         }
     }
 
+    /**
+     * Спавн корабля из NBT (в мир из рюкзака)
+     * @return true если успешно, иначе false
+     */
+    @JvmStatic
+    fun trySpawnShipFromBackpack(
+        level: ServerLevel,
+        player: ServerPlayer,
+        backpack: net.minecraft.world.item.ItemStack,
+        uuid: UUID,
+        nbt: CompoundTag
+    ): Boolean {
+        // Проверяем что в рюкзаке есть корабль
+        if (!com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
+            return false
+        }
+        // Проверяем что корабль ещё не существует в мире (не дюп)
+        val shipId = nbt.getLong("vs_ship_id")
+        if (shipId != 0L) {
+            val pipelineClass = Class.forName("org.valkyrienskies.mod.common.VSGameUtilsKt")
+            val getVsPipeline = pipelineClass.getMethod(
+                "getVsPipeline",
+                Class.forName("net.minecraft.server.MinecraftServer")
+            )
+            val pipeline = getVsPipeline.invoke(null, level.server)
+            if (pipeline != null) {
+                val shipWorld = pipeline.javaClass.getMethod("getShipWorld").invoke(pipeline)
+                if (shipWorld != null) {
+                    val getShipById = shipWorld.javaClass.getMethod("getShipById", java.lang.Long.TYPE)
+                    val ship = getShipById.invoke(shipWorld, shipId)
+                    if (ship != null) return false // Уже есть такой корабль
+                }
+            }
+        }
+        // Спавним
+        val success = spawnShipFromNBT(level, player, uuid, player.position(), nbt)
+        if (success) {
+            com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
+            return true
+        }
+        return false
+    }
+
+    /**
+     * Спавн корабля из NBT (с проверкой на коллизии и расстояние)
+     * @return true если успешно, иначе false
+     */
     @JvmStatic
     fun spawnShipFromNBT(
         level: ServerLevel,
@@ -95,33 +191,24 @@ object VModSchematicJavaHelper {
         pos: Vec3,
         nbt: CompoundTag
     ): Boolean {
-        LOGGER.info("[VModSchematicJavaHelper] spawnShipFromNBT called at pos ({}, {}, {}) for player={}", pos.x, pos.y, pos.z, player.gameProfile.name)
         try {
             if (!nbt.contains("vs_ship_id")) {
-                LOGGER.error("[VModSchematicJavaHelper] NBT does not contain vs_ship_id")
                 return false
             }
             val shipId = nbt.getLong("vs_ship_id")
             val pipelineClass = Class.forName("org.valkyrienskies.mod.common.VSGameUtilsKt")
             val getVsPipeline = pipelineClass.getMethod("getVsPipeline", Class.forName("net.minecraft.server.MinecraftServer"))
             val pipeline = getVsPipeline.invoke(null, level.server)
-            if (pipeline == null) {
-                LOGGER.error("[VModSchematicJavaHelper] VS pipeline is null!")
-                return false
-            }
+            if (pipeline == null) return false
             val shipWorld = pipeline.javaClass.getMethod("getShipWorld").invoke(pipeline)
-            if (shipWorld == null) {
-                LOGGER.error("[VModSchematicJavaHelper] ShipWorld is null!")
-                return false
-            }
+            if (shipWorld == null) return false
 
             // Поиск корабля по id
             var ship: Any? = null
             try {
                 val getShipById = shipWorld.javaClass.getMethod("getShipById", java.lang.Long.TYPE)
                 ship = getShipById.invoke(shipWorld, shipId)
-            } catch (e: NoSuchMethodException) {
-                LOGGER.warn("[VModSchematicJavaHelper] getShipById not found, fallback to allShips")
+            } catch (_: NoSuchMethodException) {
                 val allShips = shipWorld.javaClass.getMethod("getAllShips").invoke(shipWorld) as? Iterable<*>
                 if (allShips != null) {
                     ship = allShips.firstOrNull {
@@ -130,11 +217,7 @@ object VModSchematicJavaHelper {
                     }
                 }
             }
-
-            if (ship == null) {
-                LOGGER.error("[VModSchematicJavaHelper] No ship with id=$shipId found in ShipWorld!")
-                return false
-            }
+            if (ship == null) return false
 
             // Получаем размеры корабля (AABB)
             val aabb = ship.javaClass.getMethod("getWorldAABB").invoke(ship)
@@ -151,18 +234,16 @@ object VModSchematicJavaHelper {
             val maxSide = max(max(sizeX, sizeY), sizeZ)
             val spawnDist = (maxSide / 2.0) + 2.0 // половина корабля + 2 блока зазора
 
-            LOGGER.info("[VModSchematicJavaHelper] Ship AABB min=({}, {}, {}), max=({}, {}, {})", minX, minY, minZ, maxX, maxY, maxZ)
-            LOGGER.info("[VModSchematicJavaHelper] sizeX={}, sizeY={}, sizeZ={}, maxSide={}", sizeX, sizeY, sizeZ, maxSide)
-            LOGGER.info("[VModSchematicJavaHelper] Calculated spawnDist={}", spawnDist)
-
-            // Вектор взгляда и raytrace
             val eyePos = player.eyePosition
             val lookVec = player.lookAngle.normalize()
-            LOGGER.info("[VModSchematicJavaHelper] Player eyePos=({}, {}, {}), lookVec=({}, {}, {})", eyePos.x, eyePos.y, eyePos.z, lookVec.x, lookVec.y, lookVec.z)
-
             val targetPos = eyePos.add(lookVec.x * spawnDist, lookVec.y * spawnDist, lookVec.z * spawnDist)
-            LOGGER.info("[VModSchematicJavaHelper] targetPos for raytrace=({}, {}, {})", targetPos.x, targetPos.y, targetPos.z)
 
+            // Проверка что точка спавна не слишком далеко от игрока (например, не больше 32)
+            if (eyePos.distanceTo(targetPos) > 32.0) {
+                return false
+            }
+
+            // Проверка на отсутствие препятствий для спавна корабля
             val context = net.minecraft.world.level.ClipContext(
                 eyePos, targetPos,
                 net.minecraft.world.level.ClipContext.Block.OUTLINE,
@@ -171,13 +252,11 @@ object VModSchematicJavaHelper {
             )
             val hit: HitResult = level.clip(context)
             if (hit.type != HitResult.Type.MISS) {
-                LOGGER.warn("[VModSchematicJavaHelper] Cannot spawn ship: path is blocked! Hit at ({}, {}, {})", hit.location.x, hit.location.y, hit.location.z)
                 return false
             }
 
             // Новая позиция — на spawnDist от глаз игрока по взгляду
             val spawnPos = eyePos.add(lookVec.x * spawnDist, lookVec.y * spawnDist, lookVec.z * spawnDist)
-            LOGGER.info("[VModSchematicJavaHelper] Calculated spawnPos=({}, {}, {})", spawnPos.x, spawnPos.y, spawnPos.z)
 
             val serverShipClass = Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
             val teleportClass = try {
@@ -194,49 +273,41 @@ object VModSchematicJavaHelper {
                     java.lang.Double.TYPE,
                     java.lang.Double.TYPE
                 )
-                LOGGER.info("[VModSchematicJavaHelper] Invoking teleportShip with ({}, {}, {})", spawnPos.x, spawnPos.y, spawnPos.z)
                 teleportMethod.invoke(null, level, ship, spawnPos.x, spawnPos.y, spawnPos.z)
-                // Попробуем снять isStatic (если есть), чтобы корабль снова стал активным
                 try {
                     val isStaticField = serverShipClass.getDeclaredField("isStatic")
                     isStaticField.isAccessible = true
                     isStaticField.setBoolean(ship, false)
-                    LOGGER.info("[VModSchematicJavaHelper] Set isStatic=false for ship id={}", shipId)
-                } catch (e: Exception) {
-                    LOGGER.warn("[VModSchematicJavaHelper] Could not set isStatic to false for ship id={}", shipId)
-                }
-                LOGGER.info("[VModSchematicJavaHelper] Ship id={} restored to world at ({}, {}, {})", shipId, spawnPos.x, spawnPos.y, spawnPos.z)
+                } catch (_: Exception) {}
                 return true
             } else {
-                LOGGER.warn("[VModSchematicJavaHelper] Teleport class not found, can't restore ship!")
                 return false
             }
-        } catch (e: Exception) {
-            LOGGER.error("[VModSchematicJavaHelper] Exception in spawnShipFromNBT: ", e)
+        } catch (_: Exception) {
             return false
         }
     }
 
+    /**
+     * Удаляет корабль из мира через vmod helper.
+     */
     @JvmStatic
     fun removeShip(level: ServerLevel, ship: DockyardUpgradeLogic.ServerShipHandle) {
-        LOGGER.info("[VModSchematicJavaHelper] removeShip called for ship id={}", ship.getId())
         try {
             val serverShip = ship.getServerShip()
             val serverShipClass = try {
                 Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
-            } catch (e: Exception) {
-                LOGGER.error("[VModSchematicJavaHelper] ServerShip class not found!", e)
+            } catch (_: Exception) {
                 return
             }
             val castedServerShip = if (serverShipClass.isInstance(serverShip)) {
                 serverShip
             } else {
-                LOGGER.error("[VModSchematicJavaHelper] serverShip is not instance of ServerShip!")
                 return
             }
             val teleportClass = try {
                 Class.forName("com.ForgeStove.bottle_ship.Teleport")
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 null
             }
             if (teleportClass != null) {
@@ -249,12 +320,8 @@ object VModSchematicJavaHelper {
                     java.lang.Double.TYPE
                 )
                 teleportMethod.invoke(null, level, castedServerShip, 0.0, -1000.0, 0.0)
-                LOGGER.info("[VModSchematicJavaHelper] Ship id={} teleported to void.", ship.getId())
-            } else {
-                LOGGER.warn("[VModSchematicJavaHelper] Teleport class not found, can't remove ship!")
             }
-        } catch (e: Exception) {
-            LOGGER.error("[VModSchematicJavaHelper] Exception in removeShip: ", e)
+        } catch (_: Exception) {
         }
     }
 }
