@@ -4,9 +4,8 @@ import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.item.ItemStack;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.StorageScreenBase;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeSettingsTab;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.controls.ButtonDefinition;
@@ -103,49 +102,26 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                 BlockEntity be = wrapper.getStorageBlockEntity();
                 ItemStack stack = wrapper.getStorageItemStack();
 
-                ItemStack handStack = getMainHandStack();
-
-                LOGGER.info("[DockyardUpgradeTab] getDataSource: BlockEntity={}, ItemStack={}, MainHandStack={}",
-                        be,
-                        stack == null ? "null" : stack + " | NBT: " + (stack.hasTag() ? stack.getTag() : "no NBT"),
-                        handStack == null ? "null" : handStack + " | NBT: " + (handStack.hasTag() ? handStack.getTag() : "no NBT")
-                );
-
                 if (be != null) {
-                    LOGGER.info("[DockyardUpgradeTab] Using BlockEntity for dockyard tab.");
                     return new WrapperOrBlockData(be, null);
                 }
                 if (stack != null && !stack.isEmpty()) {
-                    LOGGER.info("[DockyardUpgradeTab] Using ItemStack for dockyard tab. Item: {}, NBT: {}", stack, stack.hasTag() ? stack.getTag() : "no NBT");
                     return new WrapperOrBlockData(null, stack);
                 }
             }
         } catch (Exception e) {
             LOGGER.error("[DockyardUpgradeTab] getDataSource exception: ", e);
         }
-        ItemStack fallback = getMainHandStack();
-        LOGGER.warn("[DockyardUpgradeTab] Fallback: returning main hand stack: {} | NBT: {}", fallback, fallback.hasTag() ? fallback.getTag() : "no NBT");
-        return fallback != null && !fallback.isEmpty() ? new WrapperOrBlockData(null, fallback) : null;
-    }
-
-    private ItemStack getMainHandStack() {
-        if (Minecraft.getInstance().player != null) {
-            return Minecraft.getInstance().player.getMainHandItem();
-        }
-        return ItemStack.EMPTY;
+        return null;
     }
 
     private boolean hasShipInSlot(int slot) {
         WrapperOrBlockData data = getDataSource();
         if (data == null) return false;
         if (data.be != null) {
-            boolean result = DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
-            LOGGER.info("[DockyardUpgradeTab] hasShipInBlockSlot({}): {}", slot, result);
-            return result;
+            return DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
         } else if (data.stack != null) {
-            boolean result = DockyardDataHelper.hasShipInBackpackSlot(data.stack, slot);
-            LOGGER.info("[DockyardUpgradeTab] hasShipInBackpackSlot({}): {}", slot, result);
-            return result;
+            return DockyardDataHelper.hasShipInBackpackSlot(data.stack, slot);
         }
         return false;
     }
@@ -175,29 +151,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     private void handleSlotButtonClick(int slot) {
         boolean hasShip = hasShipInSlot(slot);
-
-        // --- Найти индекс открытого рюкзака в инвентаре ---
-        int backpackSlot = findBackpackSlotInInventory();
-
-        NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip, backpackSlot));
-    }
-
-    /**
-     * Найти индекс открытого рюкзака в инвентаре игрока по ItemStack, который реально открыт в GUI.
-     */
-    private int findBackpackSlotInInventory() {
-        Player player = Minecraft.getInstance().player;
-        if (player == null) return -1;
-        // Берём тот же ItemStack, что getDataSource использует для NBT
-        WrapperOrBlockData data = getDataSource();
-        ItemStack openedBackpack = (data != null && data.stack != null) ? data.stack : ItemStack.EMPTY;
-        if (openedBackpack.isEmpty()) return -1;
-        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-            if (ItemStack.isSameItemSameTags(player.getInventory().getItem(i), openedBackpack)) {
-                return i;
-            }
-        }
-        return -1;
+        NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
 
     @Override
