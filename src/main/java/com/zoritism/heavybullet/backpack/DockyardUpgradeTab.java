@@ -90,16 +90,19 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                 BUTTON_LEFT,
                 btn -> {
                     System.out.println("[DockyardUpgradeTab] Left button clicked (capture ship)"); // Клиентский лог
-                    NetworkHandler.CHANNEL.sendToServer(new C2SHandleBottleShipPacket(false));
+                    NetworkHandler.CHANNEL.sendToServer(new C2SHandleBottleShipPacket(false)); // false = capture
                 },
                 () -> false
         ));
 
-        // Правая кнопка (пока без функции)
+        // Правая кнопка (выпуск корабля)
         addHideableChild(new ToggleButton<>(
                 new Position(x + BUTTON2_X, y + BUTTONS_Y),
                 BUTTON_RIGHT,
-                btn -> {},
+                btn -> {
+                    System.out.println("[DockyardUpgradeTab] Right button clicked (release ship)"); // Клиентский лог
+                    NetworkHandler.CHANNEL.sendToServer(new C2SHandleBottleShipPacket(true)); // true = release
+                },
                 () -> false
         ));
     }
