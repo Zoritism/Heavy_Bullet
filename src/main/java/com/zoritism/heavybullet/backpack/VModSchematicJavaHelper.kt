@@ -102,6 +102,20 @@ object VModSchematicJavaHelper {
         LOGGER.info("[VModSchematicJavaHelper] removeShip called for ship id={}", ship.getId())
         try {
             val serverShip = ship.getServerShip()
+            // BottleShip и VMod требуют именно org.valkyrienskies.core.api.ships.ServerShip
+            val serverShipClass = try {
+                Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
+            } catch (e: Exception) {
+                LOGGER.error("[VModSchematicJavaHelper] ServerShip class not found!", e)
+                return
+            }
+            // Приведение к ServerShip, если это прокси/реализация
+            val castedServerShip = if (serverShipClass.isInstance(serverShip)) {
+                serverShip
+            } else {
+                LOGGER.error("[VModSchematicJavaHelper] serverShip is not instance of ServerShip!")
+                return
+            }
             // Попробовать найти Teleport.teleportShip из BottleShip, если он есть в classpath
             val teleportClass = try {
                 Class.forName("com.ForgeStove.bottle_ship.Teleport")
@@ -109,15 +123,16 @@ object VModSchematicJavaHelper {
                 null
             }
             if (teleportClass != null) {
+                // Используем примитивные типы double, а не Double::class.java!
                 val teleportMethod = teleportClass.getMethod(
                     "teleportShip",
                     ServerLevel::class.java,
-                    serverShip.javaClass,
-                    Double::class.java,
-                    Double::class.java,
-                    Double::class.java
+                    serverShipClass,
+                    java.lang.Double.TYPE,
+                    java.lang.Double.TYPE,
+                    java.lang.Double.TYPE
                 )
-                teleportMethod.invoke(null, level, serverShip, 0.0, -1000.0, 0.0)
+                teleportMethod.invoke(null, level, castedServerShip, 0.0, -1000.0, 0.0)
                 LOGGER.info("[VModSchematicJavaHelper] Ship id={} teleported to void.", ship.getId())
             } else {
                 LOGGER.warn("[VModSchematicJavaHelper] Teleport class not found, can't remove ship!")
