@@ -4,10 +4,12 @@ import net.minecraft.core.BlockPos
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.util.UUID
+import kotlin.math.max
 
 object VModSchematicJavaHelper {
     private val LOGGER: Logger = LoggerFactory.getLogger(VModSchematicJavaHelper::class.java)
@@ -112,12 +114,62 @@ object VModSchematicJavaHelper {
                 LOGGER.error("[VModSchematicJavaHelper] ShipWorld is null!")
                 return false
             }
-            val getShipById = shipWorld.javaClass.getMethod("getShipById", java.lang.Long.TYPE)
-            val ship = getShipById.invoke(shipWorld, shipId)
+
+            // Поиск корабля по id
+            var ship: Any? = null
+            try {
+                val getShipById = shipWorld.javaClass.getMethod("getShipById", java.lang.Long.TYPE)
+                ship = getShipById.invoke(shipWorld, shipId)
+            } catch (e: NoSuchMethodException) {
+                LOGGER.warn("[VModSchematicJavaHelper] getShipById not found, fallback to allShips")
+                val allShips = shipWorld.javaClass.getMethod("getAllShips").invoke(shipWorld) as? Iterable<*>
+                if (allShips != null) {
+                    ship = allShips.firstOrNull {
+                        val id = it?.javaClass?.getMethod("getId")?.invoke(it) as? Long
+                        id == shipId
+                    }
+                }
+            }
+
             if (ship == null) {
                 LOGGER.error("[VModSchematicJavaHelper] No ship with id=$shipId found in ShipWorld!")
                 return false
             }
+
+            // Получаем размеры корабля (AABB)
+            val aabb = ship.javaClass.getMethod("getWorldAABB").invoke(ship)
+            val minX = aabb.javaClass.getMethod("minX").invoke(aabb) as Double
+            val maxX = aabb.javaClass.getMethod("maxX").invoke(aabb) as Double
+            val minY = aabb.javaClass.getMethod("minY").invoke(aabb) as Double
+            val maxY = aabb.javaClass.getMethod("maxY").invoke(aabb) as Double
+            val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
+            val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
+
+            val sizeX = maxX - minX
+            val sizeY = maxY - minY
+            val sizeZ = maxZ - minZ
+            val maxSide = max(max(sizeX, sizeY), sizeZ)
+            val safeDist = maxSide * 1.5
+
+            // Вектор взгляда и raytrace
+            val eyePos = player.eyePosition
+            val lookVec = player.lookAngle
+            val targetPos = eyePos.add(lookVec.x * safeDist, lookVec.y * safeDist, lookVec.z * safeDist)
+            val context = net.minecraft.world.level.ClipContext(
+                eyePos, targetPos,
+                net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                net.minecraft.world.level.ClipContext.Fluid.NONE,
+                player
+            )
+            val hit: HitResult = level.clip(context)
+            if (hit.type != HitResult.Type.MISS) {
+                LOGGER.warn("[VModSchematicJavaHelper] Cannot spawn ship: path is blocked!")
+                return false
+            }
+
+            // Новая позиция — на safeDist от игрока по взгляду
+            val spawnPos = eyePos.add(lookVec.x * safeDist, lookVec.y * safeDist, lookVec.z * safeDist)
+
             val serverShipClass = Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
             val teleportClass = try {
                 Class.forName("com.ForgeStove.bottle_ship.Teleport")
@@ -133,7 +185,7 @@ object VModSchematicJavaHelper {
                     java.lang.Double.TYPE,
                     java.lang.Double.TYPE
                 )
-                teleportMethod.invoke(null, level, ship, pos.x, pos.y, pos.z)
+                teleportMethod.invoke(null, level, ship, spawnPos.x, spawnPos.y, spawnPos.z)
                 // Попробуем снять isStatic (если есть), чтобы корабль снова стал активным
                 try {
                     val isStaticField = serverShipClass.getDeclaredField("isStatic")
@@ -142,7 +194,7 @@ object VModSchematicJavaHelper {
                 } catch (e: Exception) {
                     LOGGER.warn("[VModSchematicJavaHelper] Could not set isStatic to false for ship id={}", shipId)
                 }
-                LOGGER.info("[VModSchematicJavaHelper] Ship id={} restored to world at ({}, {}, {})", shipId, pos.x, pos.y, pos.z)
+                LOGGER.info("[VModSchematicJavaHelper] Ship id={} restored to world at ({}, {}, {})", shipId, spawnPos.x, spawnPos.y, spawnPos.z)
                 return true
             } else {
                 LOGGER.warn("[VModSchematicJavaHelper] Teleport class not found, can't restore ship!")
