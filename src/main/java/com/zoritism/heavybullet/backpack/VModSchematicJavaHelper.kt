@@ -77,7 +77,15 @@ object VModSchematicJavaHelper {
             val serverShip = ship.getServerShip()
             val id = serverShip.javaClass.getMethod("getId").invoke(serverShip) as Long
             nbt.putLong("vs_ship_id", id)
-            LOGGER.info("[VModSchematicJavaHelper] Saved ship id={} to NBT", id)
+            val schematicName = "hb_ship_${uuid.toString().replace("-", "")}"
+            val schematicSaved = saveShipAsSchematic(player, ship, schematicName)
+            if (schematicSaved) {
+                nbt.putString("schematic_name", schematicName)
+            } else {
+                LOGGER.error("[VModSchematicJavaHelper] Failed to save schematic for ship id={}", id)
+                return false
+            }
+            LOGGER.info("[VModSchematicJavaHelper] Saved ship id={} and schematic_name={} to NBT", id, schematicName)
             return true
         } catch (e: Exception) {
             LOGGER.error("[VModSchematicJavaHelper] Exception in saveShipToNBT: ", e)
@@ -94,14 +102,14 @@ object VModSchematicJavaHelper {
         nbt: CompoundTag
     ): Boolean {
         LOGGER.info("[VModSchematicJavaHelper] spawnShipFromNBT called at pos ({}, {}, {}) for player={}", pos.x, pos.y, pos.z, player.gameProfile.name)
-        // Если в NBT есть schematic_name — используем paste
         return try {
-            if (!nbt.contains("schematic_name")) {
-                LOGGER.warn("[VModSchematicJavaHelper] NBT does not contain schematic_name.")
-                return false
+            if (nbt.contains("schematic_name")) {
+                val schematicName = nbt.getString("schematic_name")
+                spawnShipFromSchematic(player, schematicName)
+            } else {
+                LOGGER.error("[VModSchematicJavaHelper] NBT does not contain schematic_name, cannot spawn!")
+                false
             }
-            val schematicName = nbt.getString("schematic_name")
-            spawnShipFromSchematic(player, schematicName)
         } catch (e: Exception) {
             LOGGER.error("[VModSchematicJavaHelper] Exception in spawnShipFromNBT: ", e)
             false
@@ -109,7 +117,7 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Сохраняет корабль в виде схемы (VMod Schematic API) и кладёт имя схемы в NBT.
+     * Сохраняет корабль как .nbt схему в папку world/vmod/schematics/ и кладёт имя схемы в NBT.
      * Имя схемы: hb_ship_<UUID>
      */
     @JvmStatic
@@ -119,9 +127,8 @@ object VModSchematicJavaHelper {
         schematicName: String
     ): Boolean {
         LOGGER.info("[VModSchematicJavaHelper] saveShipAsSchematic called for player={} shipId={} schematic={}", player.gameProfile.name, ship.getId(), schematicName)
-        return try {
+        try {
             val serverShip = ship.getServerShip()
-            // Получить AABB корабля
             val aabb = serverShip.javaClass.getMethod("getWorldAABB").invoke(serverShip)
             val minX = (aabb.javaClass.getMethod("minX").invoke(aabb) as Double).toInt()
             val minY = (aabb.javaClass.getMethod("minY").invoke(aabb) as Double).toInt()
@@ -132,8 +139,9 @@ object VModSchematicJavaHelper {
             val min = BlockPos(minX, minY, minZ)
             val max = BlockPos(maxX, maxY, maxZ)
             val level = player.serverLevel()
-            // VMod SchematicUtilsKt.createSchematicFromWorld(Level, BlockPos, BlockPos, String, boolean)
-            val schematicUtilsClass = Class.forName("net.spaceeye.vmod.schematic.SchematicUtilsKt")
+
+            // !!! ИСПРАВЛЕНИЕ: ищем object SchematicUtils, а не SchematicUtilsKt
+            val schematicUtilsClass = Class.forName("net.spaceeye.vmod.schematic.SchematicUtils")
             val createSchematicFromWorld = schematicUtilsClass.getMethod(
                 "createSchematicFromWorld",
                 Class.forName("net.minecraft.world.level.Level"),
@@ -142,19 +150,21 @@ object VModSchematicJavaHelper {
                 String::class.java,
                 java.lang.Boolean.TYPE
             )
+            val schematicInstance = schematicUtilsClass.getField("INSTANCE").get(null)
             val schematic = createSchematicFromWorld.invoke(
-                null, level, min, max, schematicName, true
+                schematicInstance, level, min, max, schematicName, true
             )
-            // Сохраняем схематик файл
-            val schematicIOClass = Class.forName("net.spaceeye.vmod.schematic.SchematicIOKt")
+
+            val schematicIOClass = Class.forName("net.spaceeye.vmod.schematic.SchematicIO")
             val saveSchematic = schematicIOClass.getMethod("saveSchematic", Class.forName("net.spaceeye.vmod.schematic.Schematic"), String::class.java)
+            val schematicIOInstance = schematicIOClass.getField("INSTANCE").get(null)
             val schematicPath = getSchematicPath(level.server.serverDirectory.absolutePath, schematicName)
-            saveSchematic.invoke(null, schematic, schematicPath)
+            saveSchematic.invoke(schematicIOInstance, schematic, schematicPath)
             LOGGER.info("[VModSchematicJavaHelper] Schematic '{}' saved at '{}'", schematicName, schematicPath)
-            true
+            return true
         } catch (e: Exception) {
             LOGGER.error("[VModSchematicJavaHelper] Exception in saveShipAsSchematic: ", e)
-            false
+            return false
         }
     }
 
@@ -167,18 +177,18 @@ object VModSchematicJavaHelper {
         schematicName: String
     ): Boolean {
         LOGGER.info("[VModSchematicJavaHelper] spawnShipFromSchematic called for player={}, schematic={}", player.gameProfile.name, schematicName)
-        return try {
+        try {
             val level = player.serverLevel()
-            val schematicIOClass = Class.forName("net.spaceeye.vmod.schematic.SchematicIOKt")
+            val schematicIOClass = Class.forName("net.spaceeye.vmod.schematic.SchematicIO")
             val loadSchematic = schematicIOClass.getMethod("loadSchematic", String::class.java)
+            val schematicIOInstance = schematicIOClass.getField("INSTANCE").get(null)
             val schematicPath = getSchematicPath(level.server.serverDirectory.absolutePath, schematicName)
-            val schematic = loadSchematic.invoke(null, schematicPath)
+            val schematic = loadSchematic.invoke(schematicIOInstance, schematicPath)
             if (schematic == null) {
                 LOGGER.error("[VModSchematicJavaHelper] Cannot load schematic: $schematicPath")
                 return false
             }
-            // pasteSchematic(Level, Schematic, BlockPos, Mirror, Rotation)
-            val schematicUtilsClass = Class.forName("net.spaceeye.vmod.schematic.SchematicUtilsKt")
+            val schematicUtilsClass = Class.forName("net.spaceeye.vmod.schematic.SchematicUtils")
             val pasteSchematic = schematicUtilsClass.getMethod(
                 "pasteSchematic",
                 Class.forName("net.minecraft.world.level.Level"),
@@ -187,17 +197,21 @@ object VModSchematicJavaHelper {
                 Class.forName("net.minecraft.world.level.block.Mirror"),
                 Class.forName("net.minecraft.world.level.block.Rotation")
             )
+            val schematicUtilsInstance = schematicUtilsClass.getField("INSTANCE").get(null)
             val mirrorClass = Class.forName("net.minecraft.world.level.block.Mirror")
             val rotationClass = Class.forName("net.minecraft.world.level.block.Rotation")
             val mirrorNone = mirrorClass.getField("NONE").get(null)
             val rotationNone = rotationClass.getField("NONE").get(null)
             val pos = player.blockPosition().offset(1, 0, 0)
-            pasteSchematic.invoke(null, level, schematic, pos, mirrorNone, rotationNone)
+            pasteSchematic.invoke(
+                schematicUtilsInstance,
+                level, schematic, pos, mirrorNone, rotationNone
+            )
             LOGGER.info("[VModSchematicJavaHelper] Schematic '{}' pasted at {}", schematicName, pos)
-            true
+            return true
         } catch (e: Exception) {
             LOGGER.error("[VModSchematicJavaHelper] Exception in spawnShipFromSchematic: ", e)
-            false
+            return false
         }
     }
 
@@ -206,28 +220,24 @@ object VModSchematicJavaHelper {
         LOGGER.info("[VModSchematicJavaHelper] removeShip called for ship id={}", ship.getId())
         try {
             val serverShip = ship.getServerShip()
-            // BottleShip и VMod требуют именно org.valkyrienskies.core.api.ships.ServerShip
             val serverShipClass = try {
                 Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
             } catch (e: Exception) {
                 LOGGER.error("[VModSchematicJavaHelper] ServerShip class not found!", e)
                 return
             }
-            // Приведение к ServerShip, если это прокси/реализация
             val castedServerShip = if (serverShipClass.isInstance(serverShip)) {
                 serverShip
             } else {
                 LOGGER.error("[VModSchematicJavaHelper] serverShip is not instance of ServerShip!")
                 return
             }
-            // Попробовать найти Teleport.teleportShip из BottleShip, если он есть в classpath
             val teleportClass = try {
                 Class.forName("com.ForgeStove.bottle_ship.Teleport")
             } catch (e: Exception) {
                 null
             }
             if (teleportClass != null) {
-                // Используем примитивные типы double, а не Double::class.java!
                 val teleportMethod = teleportClass.getMethod(
                     "teleportShip",
                     ServerLevel::class.java,
@@ -247,7 +257,6 @@ object VModSchematicJavaHelper {
     }
 
     private fun getSchematicPath(serverDir: String, schematicName: String): String {
-        // world/vmod/schematics/<schematicName>.nbt
         val folder = java.io.File(serverDir, "vmod/schematics")
         folder.mkdirs()
         return java.io.File(folder, "$schematicName.nbt").absolutePath
