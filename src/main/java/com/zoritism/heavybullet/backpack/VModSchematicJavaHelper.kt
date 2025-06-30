@@ -8,6 +8,7 @@ import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
 import java.util.UUID
 import kotlin.math.max
+import kotlin.math.sqrt
 
 object VModSchematicJavaHelper {
 
@@ -54,30 +55,7 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Проверка расстояния до ближайшей точки корабля (AABB).
-     */
-    private fun isShipWithinDistance(player: ServerPlayer, ship: DockyardUpgradeLogic.ServerShipHandle, maxDistance: Double): Boolean {
-        val playerPos = player.eyePosition
-        val shipObj = ship.getServerShip()
-        val aabb = try { shipObj.javaClass.getMethod("getWorldAABB").invoke(shipObj) } catch (_: Exception) { null }
-        if (aabb != null) {
-            val minX = aabb.javaClass.getMethod("minX").invoke(aabb) as Double
-            val maxX = aabb.javaClass.getMethod("maxX").invoke(aabb) as Double
-            val minY = aabb.javaClass.getMethod("minY").invoke(aabb) as Double
-            val maxY = aabb.javaClass.getMethod("maxY").invoke(aabb) as Double
-            val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
-            val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
-            val dx = maxOf(minX - playerPos.x, 0.0, playerPos.x - maxX)
-            val dy = maxOf(minY - playerPos.y, 0.0, playerPos.y - maxY)
-            val dz = maxOf(minZ - playerPos.z, 0.0, playerPos.z - maxZ)
-            val dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
-            return dist <= maxDistance
-        }
-        return false
-    }
-
-    /**
-     * Сохранить корабль в NBT (забрать в рюкзак), с атомарностью и защитой от дюпов.
+     * Сохранить корабль в NBT (забрать в рюкзак)
      * @return true если успешно, иначе false
      */
     @JvmStatic
@@ -89,13 +67,30 @@ object VModSchematicJavaHelper {
         ship: DockyardUpgradeLogic.ServerShipHandle,
         nbt: CompoundTag
     ): Boolean {
-        // Нельзя если уже есть корабль
+        // Не даём забирать корабль если в рюкзаке уже есть другой
         if (com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
             return false
         }
-        // Нельзя если корабль далеко
-        if (!isShipWithinDistance(player, ship, 4.0)) {
-            return false
+
+        // Проверяем расстояние до игрока (максимум 4 блока)
+        val playerPos = player.eyePosition
+        val shipObj = ship.getServerShip()
+        val aabb = try { shipObj.javaClass.getMethod("getWorldAABB").invoke(shipObj) } catch (_: Exception) { null }
+        if (aabb != null) {
+            val minX = aabb.javaClass.getMethod("minX").invoke(aabb) as Double
+            val maxX = aabb.javaClass.getMethod("maxX").invoke(aabb) as Double
+            val minY = aabb.javaClass.getMethod("minY").invoke(aabb) as Double
+            val maxY = aabb.javaClass.getMethod("maxY").invoke(aabb) as Double
+            val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
+            val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
+            // Реально ближайшее расстояние до бокса, а не центра
+            val dx = maxOf(minX - playerPos.x, 0.0, playerPos.x - maxX)
+            val dy = maxOf(minY - playerPos.y, 0.0, playerPos.y - maxY)
+            val dz = maxOf(minZ - playerPos.z, 0.0, playerPos.z - maxZ)
+            val dist = sqrt(dx * dx + dy * dy + dz * dz)
+            if (dist > 4.0) {
+                return false
+            }
         }
 
         // Сохраняем в NBT
@@ -105,11 +100,12 @@ object VModSchematicJavaHelper {
         // Только если успешно — сохраняем в рюкзак
         com.zoritism.heavybullet.backpack.DockyardDataHelper.saveShipToBackpack(backpack, nbt)
 
-        // Удаляем из мира: если не получилось — откатываем NBT
+        // Удаляем из мира, если только что успешно сохранили в NBT и записали в рюкзак
         val removeResult = try {
             removeShip(level, ship)
             true
         } catch (_: Exception) {
+            // Если не удалили — очищаем NBT в рюкзаке, чтобы не было дюпа
             com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
             false
         }
@@ -141,7 +137,7 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Спавн корабля из NBT (в мир из рюкзака) с атомарностью: если не получилось — не очищать NBT.
+     * Спавн корабля из NBT (в мир из рюкзака)
      * @return true если успешно, иначе false
      */
     @JvmStatic
@@ -174,7 +170,7 @@ object VModSchematicJavaHelper {
                 }
             }
         }
-        // Спавним (использует проверку расстояния, коллизий и т.д.)
+        // Спавним
         val success = spawnShipFromNBT(level, player, uuid, player.position(), nbt)
         if (success) {
             com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
@@ -240,11 +236,16 @@ object VModSchematicJavaHelper {
 
             val eyePos = player.eyePosition
             val lookVec = player.lookAngle.normalize()
-            val targetPos = eyePos.add(lookVec.x * spawnDist, lookVec.y * spawnDist, lookVec.z * spawnDist)
+            var targetPos = eyePos.add(lookVec.x * spawnDist, lookVec.y * spawnDist, lookVec.z * spawnDist)
 
-            // Проверка что точка спавна не слишком далеко от игрока (например, не больше 32)
-            if (eyePos.distanceTo(targetPos) > 32.0) {
-                return false
+            // Ограничение в 500 блоков — если spawnDist больше, то корабль появляется ровно на 500 блоках
+            val maxAllowedDist = 500.0
+            val actualDist = eyePos.distanceTo(targetPos)
+            var finalSpawnDist = spawnDist
+            if (actualDist > maxAllowedDist) {
+                // Смещаем spawnDist на границу 500 блоков
+                finalSpawnDist = maxAllowedDist
+                targetPos = eyePos.add(lookVec.x * finalSpawnDist, lookVec.y * finalSpawnDist, lookVec.z * finalSpawnDist)
             }
 
             // Проверка на отсутствие препятствий для спавна корабля
@@ -259,8 +260,8 @@ object VModSchematicJavaHelper {
                 return false
             }
 
-            // Новая позиция — на spawnDist от глаз игрока по взгляду
-            val spawnPos = eyePos.add(lookVec.x * spawnDist, lookVec.y * spawnDist, lookVec.z * spawnDist)
+            // Новая позиция — по направлению взгляда на расстоянии finalSpawnDist
+            val spawnPos = eyePos.add(lookVec.x * finalSpawnDist, lookVec.y * finalSpawnDist, lookVec.z * finalSpawnDist)
 
             val serverShipClass = Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
             val teleportClass = try {

@@ -37,13 +37,13 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     public static final ButtonDefinition.Toggle<Boolean> BUTTON_LEFT = ButtonDefinitions.createToggleButtonDefinition(
             Map.of(
                     false, GuiHelper.getButtonStateData(
-                            new UV(128, 48),
+                            new UV(112, 48), // сместили на одну позицию влево (128 -> 112)
                             "", // без подписи
                             Dimension.SQUARE_16,
                             new Position(1, 1)
                     ),
                     true, GuiHelper.getButtonStateData(
-                            new UV(128, 48),
+                            new UV(112, 48), // сместили на одну позицию влево (128 -> 112)
                             "", // без подписи
                             Dimension.SQUARE_16,
                             new Position(1, 1)
