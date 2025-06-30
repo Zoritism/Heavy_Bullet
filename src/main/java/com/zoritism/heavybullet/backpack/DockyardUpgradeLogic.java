@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -39,18 +40,20 @@ public class DockyardUpgradeLogic {
         if (release) {
             LOGGER.info("[DockyardUpgrade] Trying to release stored ship from backpack...");
             CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpack(backpack);
-            if (shipNbt != null) {
-                LOGGER.info("[DockyardUpgrade] Ship NBT found in backpack. Attempting to spawn ship...");
-                boolean restored = spawnShipFromNbt(player, shipNbt);
-                if (restored) {
+            if (shipNbt != null && shipNbt.contains("schematic_name")) {
+                String schematicName = shipNbt.getString("schematic_name");
+                LOGGER.info("[DockyardUpgrade] Schematic name in backpack: {}", schematicName);
+                boolean spawned = VModSchematicJavaHelper.spawnSchematicAtPlayer(player, schematicName);
+                if (spawned) {
                     DockyardDataHelper.clearShipFromBackpack(backpack);
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
-                    LOGGER.info("[DockyardUpgrade] Ship was released, spawned from schematic, and NBT cleared from backpack.");
+                    LOGGER.info("[DockyardUpgrade] Ship was released from schematic and NBT cleared from backpack.");
                 } else {
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.restore_failed"), true);
+                    LOGGER.error("[DockyardUpgrade] Failed to spawn ship from schematic: {}", schematicName);
                 }
             } else {
-                LOGGER.warn("[DockyardUpgrade] No stored ship NBT in backpack.");
+                LOGGER.warn("[DockyardUpgrade] No stored schematic in backpack.");
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_stored"), true);
             }
         } else {
@@ -58,16 +61,17 @@ public class DockyardUpgradeLogic {
             ServerShipHandle ship = findShipPlayerIsLookingAt(player, 100);
             if (ship != null) {
                 LOGGER.info("[DockyardUpgrade] Ship found at look position: id={}", ship.getId());
-                CompoundTag shipNbt = new CompoundTag();
-                boolean result = saveShipToNbt(ship, shipNbt, player);
+                String schematicName = generateRandomSchematicName();
+                boolean result = VModSchematicJavaHelper.saveShipAsSchematic(player, ship, schematicName);
                 if (result) {
-                    LOGGER.info("[DockyardUpgrade] Ship successfully saved to schematic NBT.");
-                    DockyardDataHelper.saveShipToBackpack(backpack, shipNbt);
+                    CompoundTag schematicNbt = new CompoundTag();
+                    schematicNbt.putString("schematic_name", schematicName);
+                    DockyardDataHelper.saveShipToBackpack(backpack, schematicNbt);
                     removeShipFromWorld(ship, player);
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
-                    LOGGER.info("[DockyardUpgrade] Ship removed from world and stored in backpack.");
+                    LOGGER.info("[DockyardUpgrade] Ship removed from world and stored as schematic in backpack. Schematic: {}", schematicName);
                 } else {
-                    LOGGER.error("[DockyardUpgrade] Ship failed to save to schematic NBT.");
+                    LOGGER.error("[DockyardUpgrade] Ship failed to save as schematic.");
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.save_failed"), true);
                 }
             } else {
@@ -75,6 +79,12 @@ public class DockyardUpgradeLogic {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_found"), true);
             }
         }
+    }
+
+    private static String generateRandomSchematicName() {
+        Random rand = new Random();
+        int num = 10000 + rand.nextInt(90000);
+        return "hb_ship_" + num;
     }
 
     private static ItemStack getBackpackFromPlayer(ServerPlayer player) {
@@ -118,52 +128,6 @@ public class DockyardUpgradeLogic {
     }
 
     /**
-     * Сохраняет корабль в NBT через vmod-схематику.
-     * @param ship ServerShipHandle (java-wrapper, должен содержать ссылку на ServerShip)
-     * @param nbt целевой CompoundTag
-     * @param player игрок (для сообщений об ошибках)
-     * @return true если успешно, иначе false
-     */
-    private static boolean saveShipToNbt(ServerShipHandle ship, CompoundTag nbt, ServerPlayer player) {
-        if (ship == null) {
-            LOGGER.error("[DockyardUpgrade] saveShipToNbt: ship is null");
-            return false;
-        }
-        ServerLevel level = player.serverLevel();
-        UUID uuid = UUID.randomUUID();
-
-        try {
-            LOGGER.info("[DockyardUpgrade] Calling VModSchematicJavaHelper.saveShipToNBT...");
-            boolean result = VModSchematicJavaHelper.saveShipToNBT(level, player, uuid, ship, nbt);
-            LOGGER.info("[DockyardUpgrade] saveShipToNbt result: {}", result);
-            return result;
-        } catch (Throwable t) {
-            LOGGER.error("[DockyardUpgrade] Exception in saveShipToNbt: ", t);
-            return false;
-        }
-    }
-
-    /**
-     * Восстанавливает корабль из NBT через vmod-схематику (paste).
-     * @return true если успешно, иначе false
-     */
-    private static boolean spawnShipFromNbt(ServerPlayer player, CompoundTag nbt) {
-        ServerLevel level = player.serverLevel();
-        UUID uuid = UUID.randomUUID();
-        Vec3 pos = player.position();
-        LOGGER.info("[DockyardUpgrade] Spawning ship from NBT at player position: ({}, {}, {})", pos.x, pos.y, pos.z);
-
-        try {
-            boolean result = VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, pos, nbt);
-            LOGGER.info("[DockyardUpgrade] spawnShipFromNBT call completed: {}", result);
-            return result;
-        } catch (Throwable t) {
-            LOGGER.error("[DockyardUpgrade] Exception in spawnShipFromNbt: ", t);
-            return false;
-        }
-    }
-
-    /**
      * Удаляет корабль из мира через vmod helper.
      */
     private static void removeShipFromWorld(ServerShipHandle ship, ServerPlayer player) {
@@ -188,7 +152,4 @@ public class DockyardUpgradeLogic {
         Object getServerShip(); // возвращает ServerShip из vmod/VS
         long getId();
     }
-
-    // Реализация object VModSchematicJavaHelper только на стороне Kotlin:
-    // см. src/main/kotlin/com/zoritism/heavybullet/backpack/VModSchematicJavaHelper.kt
 }

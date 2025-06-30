@@ -5,29 +5,32 @@ import net.minecraft.world.item.ItemStack;
 
 public class DockyardDataHelper {
     private static final String SHIP_NBT_KEY = "DockyardStoredShip";
+    private static final String SCHEMATIC_NAME_KEY = "schematic_name";
 
-    // Проверить, есть ли сохранённый корабль
     public static boolean hasShipInBackpack(ItemStack backpack) {
         if (backpack == null || !backpack.hasTag()) return false;
         CompoundTag tag = backpack.getTag();
-        return tag.contains(SHIP_NBT_KEY);
+        if (!tag.contains(SHIP_NBT_KEY)) return false;
+        CompoundTag shipTag = tag.getCompound(SHIP_NBT_KEY);
+        return shipTag.contains(SCHEMATIC_NAME_KEY);
     }
 
-    // Сохранить корабль в NBT рюкзака
-    public static void saveShipToBackpack(ItemStack backpack, CompoundTag shipNbt) {
+    public static void saveSchematicNameToBackpack(ItemStack backpack, String schematicName) {
         if (backpack == null) return;
         CompoundTag tag = backpack.getOrCreateTag();
-        tag.put(SHIP_NBT_KEY, shipNbt);
+        CompoundTag shipTag = new CompoundTag();
+        shipTag.putString(SCHEMATIC_NAME_KEY, schematicName);
+        tag.put(SHIP_NBT_KEY, shipTag);
     }
 
-    // Получить корабль из NBT рюкзака
-    public static CompoundTag getShipFromBackpack(ItemStack backpack) {
+    public static String getSchematicNameFromBackpack(ItemStack backpack) {
         if (backpack == null || !backpack.hasTag()) return null;
         CompoundTag tag = backpack.getTag();
-        return tag.contains(SHIP_NBT_KEY) ? tag.getCompound(SHIP_NBT_KEY) : null;
+        if (!tag.contains(SHIP_NBT_KEY)) return null;
+        CompoundTag shipTag = tag.getCompound(SHIP_NBT_KEY);
+        return shipTag.contains(SCHEMATIC_NAME_KEY) ? shipTag.getString(SCHEMATIC_NAME_KEY) : null;
     }
 
-    // Очистить данные корабля
     public static void clearShipFromBackpack(ItemStack backpack) {
         if (backpack == null || !backpack.hasTag()) return;
         CompoundTag tag = backpack.getTag();
