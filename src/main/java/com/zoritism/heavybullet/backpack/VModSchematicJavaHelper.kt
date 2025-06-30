@@ -92,9 +92,11 @@ object VModSchematicJavaHelper {
         uuid: UUID,
         pos: Vec3,
         nbt: CompoundTag
-    ) {
+    ): Boolean {
         LOGGER.info("[VModSchematicJavaHelper] spawnShipFromNBT called at pos ({}, {}, {}) for player={}", pos.x, pos.y, pos.z, player.gameProfile.name)
         // Нет публичного API для создания корабля из NBT/id в VS2.
+        // Возвращаем false, чтобы не было ошибки компиляции
+        return false
     }
 
     @JvmStatic
