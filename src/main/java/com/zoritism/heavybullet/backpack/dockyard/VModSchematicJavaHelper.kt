@@ -1,16 +1,16 @@
-package com.zoritism.heavybullet.backpack.dockyard
+package com.zoritism.heavybullet.backpack
 
 import net.minecraft.core.BlockPos
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
-import net.minecraft.world.item.ItemStack
-import net.minecraft.world.level.ClipContext
 import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.sqrt
+import com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeLogic
+import com.zoritism.heavybullet.backpack.dockyard.DockyardDataHelper
 
 object VModSchematicJavaHelper {
 
@@ -64,13 +64,13 @@ object VModSchematicJavaHelper {
     fun tryStoreShipToBackpack(
         level: ServerLevel,
         player: ServerPlayer,
-        backpack: ItemStack,
+        backpack: net.minecraft.world.item.ItemStack,
         uuid: UUID,
         ship: DockyardUpgradeLogic.ServerShipHandle,
         nbt: CompoundTag
     ): Boolean {
         // Не даём забирать корабль если в рюкзаке уже есть другой
-        if (DockyardDataHelper.hasShipInBackpack(backpack)) {
+        if (com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
             return false
         }
 
@@ -100,7 +100,7 @@ object VModSchematicJavaHelper {
         if (!saveResult) return false
 
         // Только если успешно — сохраняем в рюкзак
-        DockyardDataHelper.saveShipToBackpack(backpack, nbt)
+        com.zoritism.heavybullet.backpack.DockyardDataHelper.saveShipToBackpack(backpack, nbt)
 
         // Удаляем из мира, если только что успешно сохранили в NBT и записали в рюкзак
         val removeResult = try {
@@ -108,7 +108,7 @@ object VModSchematicJavaHelper {
             true
         } catch (_: Exception) {
             // Если не удалили — очищаем NBT в рюкзаке, чтобы не было дюпа
-            DockyardDataHelper.clearShipFromBackpack(backpack)
+            com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
             false
         }
         if (!removeResult) return false
@@ -146,12 +146,12 @@ object VModSchematicJavaHelper {
     fun trySpawnShipFromBackpack(
         level: ServerLevel,
         player: ServerPlayer,
-        backpack: ItemStack,
+        backpack: net.minecraft.world.item.ItemStack,
         uuid: UUID,
         nbt: CompoundTag
     ): Boolean {
         // Проверяем что в рюкзаке есть корабль
-        if (!DockyardDataHelper.hasShipInBackpack(backpack)) {
+        if (!com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
             return false
         }
         // Проверяем что корабль ещё не существует в мире (не дюп)
@@ -175,7 +175,7 @@ object VModSchematicJavaHelper {
         // Спавним
         val success = spawnShipFromNBT(level, player, uuid, player.position(), nbt)
         if (success) {
-            DockyardDataHelper.clearShipFromBackpack(backpack)
+            com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
             return true
         }
         return false
@@ -250,10 +250,10 @@ object VModSchematicJavaHelper {
             }
 
             // Проверка на отсутствие препятствий для спавна корабля
-            val context = ClipContext(
+            val context = net.minecraft.world.level.ClipContext(
                 eyePos, targetPos,
-                ClipContext.Block.OUTLINE,
-                ClipContext.Fluid.NONE,
+                net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                net.minecraft.world.level.ClipContext.Fluid.NONE,
                 player
             )
             val hit: HitResult = level.clip(context)
@@ -270,29 +270,21 @@ object VModSchematicJavaHelper {
                 eyePos.z + lookVec.z * finalSpawnDist
             )
 
-            val serverShipClass = Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
-            val teleportClass = try {
-                Class.forName("com.ForgeStove.bottle_ship.Teleport")
-            } catch (e: Exception) {
-                null
-            }
-            if (teleportClass != null) {
-                val teleportMethod = teleportClass.getMethod(
-                    "teleportShip",
-                    ServerLevel::class.java,
-                    serverShipClass,
-                    java.lang.Double.TYPE,
-                    java.lang.Double.TYPE,
-                    java.lang.Double.TYPE
-                )
-                teleportMethod.invoke(null, level, ship, spawnPos.x, spawnPos.y, spawnPos.z)
-                try {
-                    val isStaticField = serverShipClass.getDeclaredField("isStatic")
-                    isStaticField.isAccessible = true
-                    isStaticField.setBoolean(ship, false)
-                } catch (_: Exception) {}
-                return true
-            } else {
+            // Используем наш ShipTeleporter вместо bottle_ship.Teleport
+            try {
+                val serverShipClass = Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
+                if (serverShipClass.isInstance(ship)) {
+                    val serverShip = serverShipClass.cast(ship)
+                    com.zoritism.heavybullet.backpack.ShipTeleporter.teleportShip(level, serverShip, spawnPos.x, spawnPos.y, spawnPos.z)
+                    try {
+                        val isStaticField = serverShipClass.getDeclaredField("isStatic")
+                        isStaticField.isAccessible = true
+                        isStaticField.setBoolean(serverShip, false)
+                    } catch (_: Exception) {}
+                    return true
+                }
+                return false
+            } catch (_: Exception) {
                 return false
             }
         } catch (_: Exception) {
@@ -317,21 +309,11 @@ object VModSchematicJavaHelper {
             } else {
                 return
             }
-            val teleportClass = try {
-                Class.forName("com.ForgeStove.bottle_ship.Teleport")
+            // Используем наш ShipTeleporter вместо bottle_ship.Teleport
+            try {
+                com.zoritism.heavybullet.backpack.ShipTeleporter.teleportShip(level, castedServerShip, 0.0, -1000.0, 0.0)
             } catch (_: Exception) {
-                null
-            }
-            if (teleportClass != null) {
-                val teleportMethod = teleportClass.getMethod(
-                    "teleportShip",
-                    ServerLevel::class.java,
-                    serverShipClass,
-                    java.lang.Double.TYPE,
-                    java.lang.Double.TYPE,
-                    java.lang.Double.TYPE
-                )
-                teleportMethod.invoke(null, level, castedServerShip, 0.0, -1000.0, 0.0)
+                // ignore
             }
         } catch (_: Exception) {
         }
