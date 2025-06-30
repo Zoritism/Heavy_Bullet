@@ -15,10 +15,14 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.GuiHelper;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.Position;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.TextureBlitData;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
+
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeTab");
 
     private static final int TAB_WIDTH = 92;
     private static final int TAB_HEIGHT = 92;
@@ -38,13 +42,13 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     // Кнопка: правая текстура если слот пустой, левая если корабль есть
     private static final ButtonDefinition.Toggle<Boolean> SLOT_BUTTON = ButtonDefinitions.createToggleButtonDefinition(
             Map.of(
-                    false, GuiHelper.getButtonStateData( // ПУСТО -> правая текстура (синяя)
+                    false, GuiHelper.getButtonStateData(
                             new UV(144, 48),
                             "",
                             Dimension.SQUARE_16,
                             new Position(1, 1)
                     ),
-                    true, GuiHelper.getButtonStateData( // НЕ ПУСТО -> левая текстура (оранжевая)
+                    true, GuiHelper.getButtonStateData(
                             new UV(112, 48),
                             "",
                             Dimension.SQUARE_16,
@@ -91,7 +95,9 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     // Проверка: есть ли корабль в слоте (заполнить из логики контейнера!)
     private boolean hasShipInSlot(int slot) {
         // TODO: заменить на логику проверки в контейнере/апгрейде
-        return getStoredShipName(slot) != null;
+        boolean result = getStoredShipName(slot) != null;
+        LOGGER.debug("[hasShipInSlot] slot={}, result={}", slot, result);
+        return result;
     }
 
     // Получить название корабля для слота (заполнить из логики контейнера!)
@@ -99,14 +105,14 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         // TODO: получить название корабля по слоту из контейнера/апгрейда (например, через wrapper или напрямую)
         // Вот пример заглушки:
         // return slot == 0 ? "wrestler-hunger-health" : null;
+        LOGGER.debug("[getStoredShipName] slot={} (STUB: always null)", slot);
         return null;
     }
 
     // Клик по кнопке слота: если слот пустой — подобрать, иначе выпустить
     private void handleSlotButtonClick(int slot) {
         boolean hasShip = hasShipInSlot(slot);
-        // Передать на сервер номер слота и действие (подобрать/выпустить)
-        // Можно расширить пакет, если нужно больше слотов
+        LOGGER.info("[handleSlotButtonClick] slot={}, hasShip={}, sending packet...", slot, hasShip);
         NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
 
