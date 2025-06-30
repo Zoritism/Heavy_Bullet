@@ -109,34 +109,11 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         try {
             DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
             if (wrapper != null) {
-                IStorageWrapper sw = wrapper.getStorageWrapper();
-                BlockEntity be = getBlockEntityFromWrapper(sw);
+                BlockEntity be = wrapper.getStorageBlockEntity();
                 if (be != null) return new WrapperOrBlockData(be, null);
-                ItemStack stack = getItemStackFromWrapper(sw);
+                ItemStack stack = wrapper.getStorageItemStack();
                 if (stack != null) return new WrapperOrBlockData(null, stack);
             }
-        } catch (Exception ignored) {}
-        return null;
-    }
-
-    private BlockEntity getBlockEntityFromWrapper(IStorageWrapper wrapper) {
-        if (wrapper == null) return null;
-        try {
-            Method m = wrapper.getClass().getMethod("getBlockEntity");
-            Object be = m.invoke(wrapper);
-            if (be instanceof BlockEntity blockEntity) {
-                return blockEntity;
-            }
-        } catch (Exception ignored) {}
-        return null;
-    }
-
-    private ItemStack getItemStackFromWrapper(IStorageWrapper wrapper) {
-        if (wrapper == null) return null;
-        try {
-            Method m = wrapper.getClass().getMethod("getStack");
-            Object stack = m.invoke(wrapper);
-            if (stack instanceof ItemStack s) return s;
         } catch (Exception ignored) {}
         return null;
     }

@@ -5,6 +5,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -36,12 +37,25 @@ public class DockyardUpgradeLogic {
      * @param release true = выпуск, false = захват
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
-        LOGGER.info("[handleDockyardShipClick] Called for player={}, slotIndex={}, release={}",
-                player != null ? player.getName().getString() : "null", slotIndex, release);
+        // По умолчанию — legacy: использовать предмет в руке
+        handleDockyardShipClick(player, slotIndex, release, getLikelyBackpackSlot(player));
+    }
 
-        ItemStack backpack = getBackpackFromPlayer(player);
-        if (backpack == null) {
-            LOGGER.warn("[handleDockyardShipClick] Backpack not found for player={}", player.getName().getString());
+    /**
+     * Новый универсальный обработчик для любого слота и любого рюкзака:
+     * @param player игрок
+     * @param slotIndex номер слота (0 или 1)
+     * @param release true = выпуск, false = захват
+     * @param backpackSlot индекс слота инвентаря, где находится рюкзак (или -1 если не найден)
+     */
+    public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release, int backpackSlot) {
+        LOGGER.info("[handleDockyardShipClick] Called for player={}, slotIndex={}, release={}, backpackSlot={}",
+                player != null ? player.getName().getString() : "null", slotIndex, release, backpackSlot);
+
+        ItemStack backpack = getBackpackFromSlot(player, backpackSlot);
+        if (backpack == null || backpack.isEmpty()) {
+            LOGGER.warn("[handleDockyardShipClick] Backpack not found for player={}, slot={}", player.getName().getString(), backpackSlot);
+            player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
             return;
         }
 
@@ -97,10 +111,30 @@ public class DockyardUpgradeLogic {
         }
     }
 
-    private static ItemStack getBackpackFromPlayer(ServerPlayer player) {
-        ItemStack stack = player.getMainHandItem();
-        LOGGER.info("[getBackpackFromPlayer] Player={}, returning stack={}", player.getName().getString(), stack);
-        return stack;
+    // === Новый универсальный способ получения рюкзака по слоту ===
+    private static ItemStack getBackpackFromSlot(ServerPlayer player, int slot) {
+        if (slot >= 0 && slot < player.getInventory().getContainerSize()) {
+            ItemStack stack = player.getInventory().getItem(slot);
+            LOGGER.info("[getBackpackFromSlot] Player={}, slot={}, returning stack={}", player.getName().getString(), slot, stack);
+            return stack;
+        }
+        // Если нельзя однозначно определить слот — fallback на main hand
+        LOGGER.info("[getBackpackFromSlot] Player={}, slot={} is invalid, fallback to main hand", player.getName().getString(), slot);
+        return player.getMainHandItem();
+    }
+
+    // === Для совместимости: попытка угадать слот рюкзака (если вызывается старый API) ===
+    private static int getLikelyBackpackSlot(ServerPlayer player) {
+        // Если в main hand рюкзак — вернуть его слот
+        ItemStack main = player.getMainHandItem();
+        Inventory inv = player.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            if (ItemStack.isSameItemSameTags(inv.getItem(i), main)) {
+                return i;
+            }
+        }
+        // Если не найден — вернуть main hand (обычно 0 или слот меча)
+        return inv.selected;
     }
 
     /**
