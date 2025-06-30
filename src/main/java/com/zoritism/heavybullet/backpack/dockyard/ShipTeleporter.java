@@ -1,4 +1,4 @@
-package com.zoritism.heavybullet.backpack;
+package com.zoritism.heavybullet.backpack.dockyard;
 
 import net.minecraft.server.level.ServerLevel;
 import org.joml.Vector3dc;

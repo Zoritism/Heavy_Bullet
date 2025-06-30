@@ -1,18 +1,15 @@
 package com.zoritism.heavybullet;
 
-import com.zoritism.heavybullet.backpack.DockyardUpgradeContainer;
-import com.zoritism.heavybullet.backpack.DockyardUpgradeItem;
-import com.zoritism.heavybullet.backpack.DockyardUpgradeTab;
-import com.zoritism.heavybullet.backpack.DockyardUpgradeWrapper;
+import com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeContainer;
+import com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeTab;
+import com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeWrapper;
 import com.zoritism.heavybullet.network.NetworkHandler;
-import net.minecraft.world.item.Item;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegisterEvent;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeGuiManager;

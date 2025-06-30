@@ -1,4 +1,4 @@
-package com.zoritism.heavybullet.backpack;
+package com.zoritism.heavybullet.backpack.dockyard;
 
 import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;

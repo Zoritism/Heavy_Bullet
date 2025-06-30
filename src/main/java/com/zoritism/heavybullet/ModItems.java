@@ -1,6 +1,6 @@
 package com.zoritism.heavybullet;
 
-import com.zoritism.heavybullet.backpack.DockyardUpgradeItem;
+import com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;

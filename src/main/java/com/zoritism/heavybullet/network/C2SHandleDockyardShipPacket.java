@@ -1,6 +1,6 @@
 package com.zoritism.heavybullet.network;
 
-import com.zoritism.heavybullet.backpack.DockyardUpgradeLogic;
+import com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeLogic;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 

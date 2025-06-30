@@ -1,4 +1,4 @@
-package com.zoritism.heavybullet.backpack;
+package com.zoritism.heavybullet.backpack.dockyard;
 
 import net.minecraft.resources.ResourceLocation;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.IUpgradeCountLimitConfig;

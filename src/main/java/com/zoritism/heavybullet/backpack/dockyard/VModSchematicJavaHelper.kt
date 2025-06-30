@@ -1,9 +1,11 @@
-package com.zoritism.heavybullet.backpack
+package com.zoritism.heavybullet.backpack.dockyard
 
 import net.minecraft.core.BlockPos
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.level.ClipContext
 import net.minecraft.world.phys.HitResult
 import net.minecraft.world.phys.Vec3
 import java.util.UUID
@@ -62,13 +64,13 @@ object VModSchematicJavaHelper {
     fun tryStoreShipToBackpack(
         level: ServerLevel,
         player: ServerPlayer,
-        backpack: net.minecraft.world.item.ItemStack,
+        backpack: ItemStack,
         uuid: UUID,
         ship: DockyardUpgradeLogic.ServerShipHandle,
         nbt: CompoundTag
     ): Boolean {
         // Не даём забирать корабль если в рюкзаке уже есть другой
-        if (com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
+        if (DockyardDataHelper.hasShipInBackpack(backpack)) {
             return false
         }
 
@@ -98,7 +100,7 @@ object VModSchematicJavaHelper {
         if (!saveResult) return false
 
         // Только если успешно — сохраняем в рюкзак
-        com.zoritism.heavybullet.backpack.DockyardDataHelper.saveShipToBackpack(backpack, nbt)
+        DockyardDataHelper.saveShipToBackpack(backpack, nbt)
 
         // Удаляем из мира, если только что успешно сохранили в NBT и записали в рюкзак
         val removeResult = try {
@@ -106,7 +108,7 @@ object VModSchematicJavaHelper {
             true
         } catch (_: Exception) {
             // Если не удалили — очищаем NBT в рюкзаке, чтобы не было дюпа
-            com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
+            DockyardDataHelper.clearShipFromBackpack(backpack)
             false
         }
         if (!removeResult) return false
@@ -144,12 +146,12 @@ object VModSchematicJavaHelper {
     fun trySpawnShipFromBackpack(
         level: ServerLevel,
         player: ServerPlayer,
-        backpack: net.minecraft.world.item.ItemStack,
+        backpack: ItemStack,
         uuid: UUID,
         nbt: CompoundTag
     ): Boolean {
         // Проверяем что в рюкзаке есть корабль
-        if (!com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
+        if (!DockyardDataHelper.hasShipInBackpack(backpack)) {
             return false
         }
         // Проверяем что корабль ещё не существует в мире (не дюп)
@@ -173,7 +175,7 @@ object VModSchematicJavaHelper {
         // Спавним
         val success = spawnShipFromNBT(level, player, uuid, player.position(), nbt)
         if (success) {
-            com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
+            DockyardDataHelper.clearShipFromBackpack(backpack)
             return true
         }
         return false
@@ -248,10 +250,10 @@ object VModSchematicJavaHelper {
             }
 
             // Проверка на отсутствие препятствий для спавна корабля
-            val context = net.minecraft.world.level.ClipContext(
+            val context = ClipContext(
                 eyePos, targetPos,
-                net.minecraft.world.level.ClipContext.Block.OUTLINE,
-                net.minecraft.world.level.ClipContext.Fluid.NONE,
+                ClipContext.Block.OUTLINE,
+                ClipContext.Fluid.NONE,
                 player
             )
             val hit: HitResult = level.clip(context)

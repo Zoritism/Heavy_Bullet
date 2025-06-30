@@ -1,4 +1,4 @@
-package com.zoritism.heavybullet.backpack;
+package com.zoritism.heavybullet.backpack.dockyard;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;

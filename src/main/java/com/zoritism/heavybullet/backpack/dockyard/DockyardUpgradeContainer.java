@@ -1,4 +1,4 @@
-package com.zoritism.heavybullet.backpack;
+package com.zoritism.heavybullet.backpack.dockyard;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
