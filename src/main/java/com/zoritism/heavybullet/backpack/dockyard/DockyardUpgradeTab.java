@@ -4,10 +4,9 @@ import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.StorageScreenBase;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeSettingsTab;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.controls.ButtonDefinition;
@@ -18,18 +17,12 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.GuiHelper;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.Position;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.TextureBlitData;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
+import net.minecraft.nbt.CompoundTag;
 
-import java.lang.reflect.Method;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/**
- * DockyardUpgradeTab:
- * - Всегда показывает актуальное содержимое того рюкзака, который реально открыт (через контейнер), а не только в руке.
- * - В режиме блока использует persistentData блок-сущности, для предмета — NBT предмета.
- * - Кнопки корректно работают для сбора/выпуска корабля в каждом слоте.
- */
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
 
     private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeTab");
@@ -94,9 +87,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         ));
     }
 
-    /**
-     * Класс-обёртка: либо блок, либо предмет. Только один из них не null.
-     */
     private static class WrapperOrBlockData {
         final BlockEntity be;
         final ItemStack stack;
@@ -106,10 +96,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         }
     }
 
-    /**
-     * Получить источник данных: если открыт блок — BlockEntity, иначе ItemStack (именно тот, который реально открыт в контейнере!).
-     * Добавлено подробное логирование для диагностики.
-     */
     private WrapperOrBlockData getDataSource() {
         try {
             DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
@@ -117,7 +103,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                 BlockEntity be = wrapper.getStorageBlockEntity();
                 ItemStack stack = wrapper.getStorageItemStack();
 
-                // log both for debug
                 ItemStack handStack = getMainHandStack();
 
                 LOGGER.info("[DockyardUpgradeTab] getDataSource: BlockEntity={}, ItemStack={}, MainHandStack={}",
@@ -138,7 +123,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         } catch (Exception e) {
             LOGGER.error("[DockyardUpgradeTab] getDataSource exception: ", e);
         }
-        // Also log fallback for debug
         ItemStack fallback = getMainHandStack();
         LOGGER.warn("[DockyardUpgradeTab] Fallback: returning main hand stack: {} | NBT: {}", fallback, fallback.hasTag() ? fallback.getTag() : "no NBT");
         return fallback != null && !fallback.isEmpty() ? new WrapperOrBlockData(null, fallback) : null;
@@ -151,9 +135,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         return ItemStack.EMPTY;
     }
 
-    /**
-     * Проверка наличия корабля в слоте (универсально для блока и предмета)
-     */
     private boolean hasShipInSlot(int slot) {
         WrapperOrBlockData data = getDataSource();
         if (data == null) return false;
@@ -169,9 +150,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         return false;
     }
 
-    /**
-     * Получить название корабля для слота (универсально для блока и предмета)
-     */
     private String getStoredShipName(int slot) {
         WrapperOrBlockData data = getDataSource();
         if (data == null) return "";
@@ -195,12 +173,31 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         return "";
     }
 
-    /**
-     * Клик по кнопке: если слот пустой — подобрать (release=false), если есть корабль — выпустить (release=true)
-     */
     private void handleSlotButtonClick(int slot) {
         boolean hasShip = hasShipInSlot(slot);
-        NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
+
+        // --- Найти индекс открытого рюкзака в инвентаре ---
+        int backpackSlot = findBackpackSlotInInventory();
+
+        NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip, backpackSlot));
+    }
+
+    /**
+     * Найти индекс открытого рюкзака в инвентаре игрока по ItemStack, который реально открыт в GUI.
+     */
+    private int findBackpackSlotInInventory() {
+        Player player = Minecraft.getInstance().player;
+        if (player == null) return -1;
+        // Берём тот же ItemStack, что getDataSource использует для NBT
+        WrapperOrBlockData data = getDataSource();
+        ItemStack openedBackpack = (data != null && data.stack != null) ? data.stack : ItemStack.EMPTY;
+        if (openedBackpack.isEmpty()) return -1;
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            if (ItemStack.isSameItemSameTags(player.getInventory().getItem(i), openedBackpack)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @Override
@@ -216,7 +213,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             return;
         }
 
-        // Слот 0 (верхний)
         boolean slot1HasShip = hasShipInSlot(0);
         TextureBlitData field1 = slot1HasShip ? FIELD_ACTIVE : FIELD_INACTIVE;
         GuiHelper.blit(graphics, x + FIELD_X, y + FIELD1_Y, field1, FIELD_WIDTH, FIELD_HEIGHT);
@@ -227,7 +223,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                 y + FIELD1_Y + 4,
                 0x404040, false);
 
-        // Слот 1 (нижний)
         boolean slot2HasShip = hasShipInSlot(1);
         TextureBlitData field2 = slot2HasShip ? FIELD_ACTIVE : FIELD_INACTIVE;
         GuiHelper.blit(graphics, x + FIELD_X, y + FIELD2_Y, field2, FIELD_WIDTH, FIELD_HEIGHT);
