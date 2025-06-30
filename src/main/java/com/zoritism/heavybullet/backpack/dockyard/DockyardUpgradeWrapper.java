@@ -35,6 +35,11 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         super(storageWrapper, upgrade, upgradeSaveHandler);
     }
 
+    // Публичный геттер для storageWrapper
+    public IStorageWrapper getStorageWrapper() {
+        return this.storageWrapper;
+    }
+
     @Override
     public boolean canBeDisabled() {
         return false;
