@@ -1,4 +1,4 @@
-package com.zoritism.heavybullet.backpack
+package com.zoritism.heavybullet.backpack.dockyard
 
 import net.minecraft.core.BlockPos
 import net.minecraft.nbt.CompoundTag
@@ -9,8 +9,6 @@ import net.minecraft.world.phys.Vec3
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.sqrt
-import com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeLogic
-import com.zoritism.heavybullet.backpack.dockyard.DockyardDataHelper
 
 object VModSchematicJavaHelper {
 
@@ -70,7 +68,7 @@ object VModSchematicJavaHelper {
         nbt: CompoundTag
     ): Boolean {
         // Не даём забирать корабль если в рюкзаке уже есть другой
-        if (com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
+        if (DockyardDataHelper.hasShipInBackpack(backpack)) {
             return false
         }
 
@@ -100,7 +98,7 @@ object VModSchematicJavaHelper {
         if (!saveResult) return false
 
         // Только если успешно — сохраняем в рюкзак
-        com.zoritism.heavybullet.backpack.DockyardDataHelper.saveShipToBackpack(backpack, nbt)
+        DockyardDataHelper.saveShipToBackpack(backpack, nbt)
 
         // Удаляем из мира, если только что успешно сохранили в NBT и записали в рюкзак
         val removeResult = try {
@@ -108,7 +106,7 @@ object VModSchematicJavaHelper {
             true
         } catch (_: Exception) {
             // Если не удалили — очищаем NBT в рюкзаке, чтобы не было дюпа
-            com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
+            DockyardDataHelper.clearShipFromBackpack(backpack)
             false
         }
         if (!removeResult) return false
@@ -151,7 +149,7 @@ object VModSchematicJavaHelper {
         nbt: CompoundTag
     ): Boolean {
         // Проверяем что в рюкзаке есть корабль
-        if (!com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
+        if (!DockyardDataHelper.hasShipInBackpack(backpack)) {
             return false
         }
         // Проверяем что корабль ещё не существует в мире (не дюп)
@@ -175,7 +173,7 @@ object VModSchematicJavaHelper {
         // Спавним
         val success = spawnShipFromNBT(level, player, uuid, player.position(), nbt)
         if (success) {
-            com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
+            DockyardDataHelper.clearShipFromBackpack(backpack)
             return true
         }
         return false
@@ -270,12 +268,11 @@ object VModSchematicJavaHelper {
                 eyePos.z + lookVec.z * finalSpawnDist
             )
 
-            // Используем наш ShipTeleporter вместо bottle_ship.Teleport
             try {
                 val serverShipClass = Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
                 if (serverShipClass.isInstance(ship)) {
                     val serverShip = serverShipClass.cast(ship)
-                    com.zoritism.heavybullet.backpack.ShipTeleporter.teleportShip(level, serverShip, spawnPos.x, spawnPos.y, spawnPos.z)
+                    ShipTeleporter.teleportShip(level, serverShip, spawnPos.x, spawnPos.y, spawnPos.z)
                     try {
                         val isStaticField = serverShipClass.getDeclaredField("isStatic")
                         isStaticField.isAccessible = true
@@ -309,11 +306,9 @@ object VModSchematicJavaHelper {
             } else {
                 return
             }
-            // Используем наш ShipTeleporter вместо bottle_ship.Teleport
             try {
-                com.zoritism.heavybullet.backpack.ShipTeleporter.teleportShip(level, castedServerShip, 0.0, -1000.0, 0.0)
+                ShipTeleporter.teleportShip(level, castedServerShip, 0.0, -1000.0, 0.0)
             } catch (_: Exception) {
-                // ignore
             }
         } catch (_: Exception) {
         }
