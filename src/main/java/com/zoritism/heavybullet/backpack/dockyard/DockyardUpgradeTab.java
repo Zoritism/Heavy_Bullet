@@ -46,7 +46,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                             new Position(1, 1)
                     ),
                     true, GuiHelper.getButtonStateData(
-                            new UV(128, 48),
+                            new UV(112, 48),
                             "",
                             Dimension.SQUARE_16,
                             new Position(1, 1)
@@ -54,14 +54,15 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             )
     );
 
-    // Позиции оставляем как в старом интерфейсе
-    private static final int FIELD_X = 5;
+    // Расположение полей и кнопок: поля идут слева, кнопки сразу справа без отступа
+    private static final int FIELD_X = 6;
     private static final int FIELD1_Y = 25;
-    private static final int FIELD2_Y = FIELD1_Y + 18;
+    private static final int FIELD2_Y = FIELD1_Y + 22;
 
-    private static final int BUTTON1_X = 5;
-    private static final int BUTTON2_X = 5 + 20;
-    private static final int BUTTONS_Y = FIELD2_Y + 24;
+    // Кнопки сразу справа от поля (FIELD_X + FIELD_WIDTH), по центру поля по вертикали
+    private static final int BUTTON_X = FIELD_X + FIELD_WIDTH;
+    private static final int BUTTON1_Y = FIELD1_Y + (FIELD_HEIGHT / 2) - 8;
+    private static final int BUTTON2_Y = FIELD2_Y + (FIELD_HEIGHT / 2) - 8;
 
     public DockyardUpgradeTab(DockyardUpgradeContainer upgradeContainer, Position position, StorageScreenBase<?> screen) {
         super(upgradeContainer, position, screen,
@@ -70,17 +71,17 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
         openTabDimension = new Dimension(TAB_WIDTH, TAB_HEIGHT);
 
-        // Кнопка для первого слота (слот 0)
+        // Верхняя кнопка для первого слота (слот 0)
         addHideableChild(new ToggleButton<>(
-                new Position(x + BUTTON1_X, y + BUTTONS_Y),
+                new Position(x + BUTTON_X, y + BUTTON1_Y),
                 SLOT_BUTTON,
                 btn -> handleSlotButtonClick(0),
                 () -> hasShipInSlot(0)
         ));
 
-        // Кнопка для второго слота (слот 1)
+        // Нижняя кнопка для второго слота (слот 1)
         addHideableChild(new ToggleButton<>(
-                new Position(x + BUTTON2_X, y + BUTTONS_Y),
+                new Position(x + BUTTON_X, y + BUTTON2_Y),
                 SLOT_BUTTON,
                 btn -> handleSlotButtonClick(1),
                 () -> hasShipInSlot(1)
