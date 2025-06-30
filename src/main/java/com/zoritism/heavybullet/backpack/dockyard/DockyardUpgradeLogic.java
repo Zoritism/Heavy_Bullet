@@ -16,7 +16,7 @@ import java.util.UUID;
 
 /**
  * Логика докового апгрейда с использованием vmod-схематики.
- * Требует vmod и kotlin обёртку для вызова из Java!
+ * Теперь поддерживает два слота хранения в рюкзаке.
  */
 public class DockyardUpgradeLogic {
 
@@ -39,10 +39,6 @@ public class DockyardUpgradeLogic {
         LOGGER.info("[handleDockyardShipClick] Called for player={}, slotIndex={}, release={}",
                 player != null ? player.getName().getString() : "null", slotIndex, release);
 
-        // TODO: заменить на систему с двумя слотами!
-        // Пока реализовано только для одного слота (как было раньше)
-        // В дальнейшем здесь должна быть работа с NBT по slotIndex
-
         ItemStack backpack = getBackpackFromPlayer(player);
         if (backpack == null) {
             LOGGER.warn("[handleDockyardShipClick] Backpack not found for player={}", player.getName().getString());
@@ -50,26 +46,26 @@ public class DockyardUpgradeLogic {
         }
 
         if (release) {
-            LOGGER.info("[handleDockyardShipClick] Trying to release ship from backpack");
-            CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpack(backpack);
+            LOGGER.info("[handleDockyardShipClick] Trying to release ship from backpack slot {}", slotIndex);
+            CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpackSlot(backpack, slotIndex);
             if (shipNbt != null) {
                 boolean restored = spawnShipFromNbt(player, shipNbt);
                 LOGGER.info("[handleDockyardShipClick] Spawn ship result: {}", restored);
                 if (restored) {
-                    DockyardDataHelper.clearShipFromBackpack(backpack);
+                    DockyardDataHelper.clearShipFromBackpackSlot(backpack, slotIndex);
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
                 } else {
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.restore_failed"), true);
                 }
             } else {
-                LOGGER.info("[handleDockyardShipClick] No ship stored in backpack");
+                LOGGER.info("[handleDockyardShipClick] No ship stored in backpack slot {}", slotIndex);
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_stored"), true);
             }
         } else {
-            LOGGER.info("[handleDockyardShipClick] Trying to store ship in backpack");
-            // Предохранитель: если уже есть корабль в рюкзаке — запрещаем захват нового
-            if (DockyardDataHelper.hasShipInBackpack(backpack)) {
-                LOGGER.warn("[handleDockyardShipClick] Backpack already has ship, cannot store another");
+            LOGGER.info("[handleDockyardShipClick] Trying to store ship in backpack slot {}", slotIndex);
+            // Запрет: если этот слот уже занят, запрещаем захват нового корабля в этот слот
+            if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slotIndex)) {
+                LOGGER.warn("[handleDockyardShipClick] Backpack slot {} already has ship, cannot store another", slotIndex);
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
@@ -80,13 +76,13 @@ public class DockyardUpgradeLogic {
                 boolean result = saveShipToNbt(ship, shipNbt, player);
                 LOGGER.info("[handleDockyardShipClick] saveShipToNbt result: {}", result);
                 if (result) {
-                    DockyardDataHelper.saveShipToBackpack(backpack, shipNbt);
+                    DockyardDataHelper.saveShipToBackpackSlot(backpack, shipNbt, slotIndex);
                     boolean removed = removeShipFromWorld(ship, player);
                     LOGGER.info("[handleDockyardShipClick] removeShipFromWorld result: {}", removed);
                     if (removed) {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
                     } else {
-                        DockyardDataHelper.clearShipFromBackpack(backpack);
+                        DockyardDataHelper.clearShipFromBackpackSlot(backpack, slotIndex);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.remove_failed"), true);
                     }
                 } else {

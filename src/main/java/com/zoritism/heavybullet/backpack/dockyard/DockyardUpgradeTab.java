@@ -4,7 +4,8 @@ import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.ItemStack;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.StorageScreenBase;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeSettingsTab;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.controls.ButtonDefinition;
@@ -64,8 +65,8 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     public DockyardUpgradeTab(DockyardUpgradeContainer upgradeContainer, Position position, StorageScreenBase<?> screen) {
         super(upgradeContainer, position, screen,
-                Component.translatable("gui.heavybullet.dockyard.title"),
-                Component.translatable("gui.heavybullet.dockyard.tooltip"));
+                net.minecraft.network.chat.Component.translatable("gui.heavybullet.dockyard.title"),
+                net.minecraft.network.chat.Component.translatable("gui.heavybullet.dockyard.tooltip"));
 
         openTabDimension = new Dimension(TAB_WIDTH, TAB_HEIGHT);
 
@@ -86,21 +87,43 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         ));
     }
 
-    // Проверка наличия корабля в слоте
+    // Проверка наличия корабля в слоте (использует NBT рюкзака, для поддержки двух слотов)
     private boolean hasShipInSlot(int slot) {
-        // TODO: заменить на реальную логику
-        // Для теста: слот 0 всегда корабль, слот 1 всегда пустой
-        return slot == 0;
+        ItemStack backpack = getBackpack();
+        if (backpack == null || !backpack.hasTag()) {
+            return false;
+        }
+        CompoundTag tag = backpack.getTag();
+        // Для двух слотов: DockyardStoredShip (для 0), DockyardStoredShip1 (для 1)
+        String key = slot == 0 ? "DockyardStoredShip" : "DockyardStoredShip" + slot;
+        return tag.contains(key);
     }
 
-    // Получить название корабля для слота (или пусто, если нет)
+    // Получить название корабля для слота (по NBT, если есть)
     private String getStoredShipName(int slot) {
-        // TODO: заменить на реальную логику
-        if (hasShipInSlot(slot)) {
-            return "wrestler-hunger-health";
-        } else {
+        ItemStack backpack = getBackpack();
+        if (backpack == null || !backpack.hasTag()) {
             return "";
         }
+        CompoundTag tag = backpack.getTag();
+        String key = slot == 0 ? "DockyardStoredShip" : "DockyardStoredShip" + slot;
+        if (tag.contains(key)) {
+            CompoundTag shipTag = tag.getCompound(key);
+            if (shipTag.contains("vs_ship_name")) {
+                return shipTag.getString("vs_ship_name");
+            }
+            // Fallback: если нет красивого названия, показывать id
+            if (shipTag.contains("vs_ship_id")) {
+                return "id:" + shipTag.getLong("vs_ship_id");
+            }
+            return "<ship>";
+        }
+        return "";
+    }
+
+    // Получение рюкзака игрока (всегда в main hand!)
+    private ItemStack getBackpack() {
+        return Minecraft.getInstance().player != null ? Minecraft.getInstance().player.getMainHandItem() : ItemStack.EMPTY;
     }
 
     // Клик по кнопке: если слот пустой — подобрать, если есть корабль — выпустить
