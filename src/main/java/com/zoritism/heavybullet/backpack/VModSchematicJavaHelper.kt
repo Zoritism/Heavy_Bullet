@@ -94,9 +94,64 @@ object VModSchematicJavaHelper {
         nbt: CompoundTag
     ): Boolean {
         LOGGER.info("[VModSchematicJavaHelper] spawnShipFromNBT called at pos ({}, {}, {}) for player={}", pos.x, pos.y, pos.z, player.gameProfile.name)
-        // Нет публичного API для создания корабля из NBT/id в VS2.
-        // Возвращаем false, чтобы не было ошибки компиляции
-        return false
+        try {
+            if (!nbt.contains("vs_ship_id")) {
+                LOGGER.error("[VModSchematicJavaHelper] NBT does not contain vs_ship_id")
+                return false
+            }
+            val shipId = nbt.getLong("vs_ship_id")
+            val pipelineClass = Class.forName("org.valkyrienskies.mod.common.VSGameUtilsKt")
+            val getVsPipeline = pipelineClass.getMethod("getVsPipeline", Class.forName("net.minecraft.server.MinecraftServer"))
+            val pipeline = getVsPipeline.invoke(null, level.server)
+            if (pipeline == null) {
+                LOGGER.error("[VModSchematicJavaHelper] VS pipeline is null!")
+                return false
+            }
+            val shipWorld = pipeline.javaClass.getMethod("getShipWorld").invoke(pipeline)
+            if (shipWorld == null) {
+                LOGGER.error("[VModSchematicJavaHelper] ShipWorld is null!")
+                return false
+            }
+            val getShipById = shipWorld.javaClass.getMethod("getShipById", java.lang.Long.TYPE)
+            val ship = getShipById.invoke(shipWorld, shipId)
+            if (ship == null) {
+                LOGGER.error("[VModSchematicJavaHelper] No ship with id=$shipId found in ShipWorld!")
+                return false
+            }
+            val serverShipClass = Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
+            val teleportClass = try {
+                Class.forName("com.ForgeStove.bottle_ship.Teleport")
+            } catch (e: Exception) {
+                null
+            }
+            if (teleportClass != null) {
+                val teleportMethod = teleportClass.getMethod(
+                    "teleportShip",
+                    ServerLevel::class.java,
+                    serverShipClass,
+                    java.lang.Double.TYPE,
+                    java.lang.Double.TYPE,
+                    java.lang.Double.TYPE
+                )
+                teleportMethod.invoke(null, level, ship, pos.x, pos.y, pos.z)
+                // Попробуем снять isStatic (если есть), чтобы корабль снова стал активным
+                try {
+                    val isStaticField = serverShipClass.getDeclaredField("isStatic")
+                    isStaticField.isAccessible = true
+                    isStaticField.setBoolean(ship, false)
+                } catch (e: Exception) {
+                    LOGGER.warn("[VModSchematicJavaHelper] Could not set isStatic to false for ship id={}", shipId)
+                }
+                LOGGER.info("[VModSchematicJavaHelper] Ship id={} restored to world at ({}, {}, {})", shipId, pos.x, pos.y, pos.z)
+                return true
+            } else {
+                LOGGER.warn("[VModSchematicJavaHelper] Teleport class not found, can't restore ship!")
+                return false
+            }
+        } catch (e: Exception) {
+            LOGGER.error("[VModSchematicJavaHelper] Exception in spawnShipFromNBT: ", e)
+            return false
+        }
     }
 
     @JvmStatic
@@ -104,28 +159,24 @@ object VModSchematicJavaHelper {
         LOGGER.info("[VModSchematicJavaHelper] removeShip called for ship id={}", ship.getId())
         try {
             val serverShip = ship.getServerShip()
-            // BottleShip и VMod требуют именно org.valkyrienskies.core.api.ships.ServerShip
             val serverShipClass = try {
                 Class.forName("org.valkyrienskies.core.api.ships.ServerShip")
             } catch (e: Exception) {
                 LOGGER.error("[VModSchematicJavaHelper] ServerShip class not found!", e)
                 return
             }
-            // Приведение к ServerShip, если это прокси/реализация
             val castedServerShip = if (serverShipClass.isInstance(serverShip)) {
                 serverShip
             } else {
                 LOGGER.error("[VModSchematicJavaHelper] serverShip is not instance of ServerShip!")
                 return
             }
-            // Попробовать найти Teleport.teleportShip из BottleShip, если он есть в classpath
             val teleportClass = try {
                 Class.forName("com.ForgeStove.bottle_ship.Teleport")
             } catch (e: Exception) {
                 null
             }
             if (teleportClass != null) {
-                // Используем примитивные типы double, а не Double::class.java!
                 val teleportMethod = teleportClass.getMethod(
                     "teleportShip",
                     ServerLevel::class.java,
