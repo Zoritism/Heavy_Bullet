@@ -18,10 +18,10 @@ public class NetworkHandler {
     public static void register() {
         CHANNEL.registerMessage(
                 packetId++,
-                C2SHandleBottleShipPacket.class,
-                C2SHandleBottleShipPacket::encode,
-                C2SHandleBottleShipPacket::decode,
-                C2SHandleBottleShipPacket::handle
+                C2SHandleDockyardShipPacket.class,
+                C2SHandleDockyardShipPacket::encode,
+                C2SHandleDockyardShipPacket::decode,
+                C2SHandleDockyardShipPacket::handle
         );
     }
 }

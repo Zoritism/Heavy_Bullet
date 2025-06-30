@@ -1,6 +1,6 @@
 package com.zoritism.heavybullet.backpack;
 
-import com.zoritism.heavybullet.network.C2SHandleBottleShipPacket;
+import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -20,47 +20,32 @@ import java.util.Map;
 
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
 
-    // Как в AnvilUpgradeTab
-    private static final int TAB_WIDTH = 103;
+    private static final int TAB_WIDTH = 92;
     private static final int TAB_HEIGHT = 92;
     private static final int BODY_HEIGHT = 92;
 
-    // Полоски для текста (фон для ввода, как в AnvilUpgradeTab)
-    private static final TextureBlitData EDIT_ITEM_NAME_BACKGROUND = new TextureBlitData(
-            GuiHelper.GUI_CONTROLS, Dimension.SQUARE_256, new UV(28, 99), new Dimension(100, 16)
+    // Поля для кораблей (как в AnvilUpgradeTab, только чуть короче)
+    private static final int FIELD_WIDTH = 84;
+    private static final int FIELD_HEIGHT = 16;
+
+    private static final TextureBlitData FIELD_ACTIVE = new TextureBlitData(
+            GuiHelper.GUI_CONTROLS, Dimension.SQUARE_256, new UV(28, 99), new Dimension(FIELD_WIDTH, FIELD_HEIGHT)
     );
-    private static final TextureBlitData EDIT_ITEM_NAME_BACKGROUND_DISABLED = new TextureBlitData(
-            GuiHelper.GUI_CONTROLS, Dimension.SQUARE_256, new UV(28, 115), new Dimension(100, 16)
+    private static final TextureBlitData FIELD_INACTIVE = new TextureBlitData(
+            GuiHelper.GUI_CONTROLS, Dimension.SQUARE_256, new UV(28, 115), new Dimension(FIELD_WIDTH, FIELD_HEIGHT)
     );
 
-    // Кнопки с иконками (как в MagnetUpgradeTab)
-    public static final ButtonDefinition.Toggle<Boolean> BUTTON_LEFT = ButtonDefinitions.createToggleButtonDefinition(
+    // Кнопка: правая текстура если слот пустой, левая если корабль есть
+    private static final ButtonDefinition.Toggle<Boolean> SLOT_BUTTON = ButtonDefinitions.createToggleButtonDefinition(
             Map.of(
-                    false, GuiHelper.getButtonStateData(
-                            new UV(112, 48), // сместили на одну позицию влево (128 -> 112)
-                            "", // без подписи
-                            Dimension.SQUARE_16,
-                            new Position(1, 1)
-                    ),
-                    true, GuiHelper.getButtonStateData(
-                            new UV(112, 48), // сместили на одну позицию влево (128 -> 112)
-                            "", // без подписи
-                            Dimension.SQUARE_16,
-                            new Position(1, 1)
-                    )
-            )
-    );
-
-    public static final ButtonDefinition.Toggle<Boolean> BUTTON_RIGHT = ButtonDefinitions.createToggleButtonDefinition(
-            Map.of(
-                    false, GuiHelper.getButtonStateData(
+                    false, GuiHelper.getButtonStateData( // ПУСТО -> правая текстура (синяя)
                             new UV(144, 48),
                             "",
                             Dimension.SQUARE_16,
                             new Position(1, 1)
                     ),
-                    true, GuiHelper.getButtonStateData(
-                            new UV(144, 48),
+                    true, GuiHelper.getButtonStateData( // НЕ ПУСТО -> левая текстура (оранжевая)
+                            new UV(112, 48),
                             "",
                             Dimension.SQUARE_16,
                             new Position(1, 1)
@@ -68,14 +53,16 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             )
     );
 
-    // Позиции и размеры как в AnvilUpgradeTab
-    private static final int STRIP_X = 5;
-    private static final int STRIP1_Y = 25;
-    private static final int STRIP2_Y = STRIP1_Y + 18;
+    // Позиции
+    private static final int FIELD1_X = 6;
+    private static final int FIELD1_Y = 24;
+    private static final int FIELD2_X = 6;
+    private static final int FIELD2_Y = FIELD1_Y + 22;
 
-    private static final int BUTTON1_X = 5;
-    private static final int BUTTON2_X = 5 + 20;
-    private static final int BUTTONS_Y = STRIP2_Y + 24;
+    private static final int BUTTON1_X = FIELD1_X + FIELD_WIDTH + 4;
+    private static final int BUTTON1_Y = FIELD1_Y;
+    private static final int BUTTON2_X = FIELD2_X + FIELD_WIDTH + 4;
+    private static final int BUTTON2_Y = FIELD2_Y;
 
     public DockyardUpgradeTab(DockyardUpgradeContainer upgradeContainer, Position position, StorageScreenBase<?> screen) {
         super(upgradeContainer, position, screen,
@@ -84,27 +71,43 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
         openTabDimension = new Dimension(TAB_WIDTH, TAB_HEIGHT);
 
-        // Левая кнопка (захват корабля)
+        // Левая кнопка (Слот 1)
         addHideableChild(new ToggleButton<>(
-                new Position(x + BUTTON1_X, y + BUTTONS_Y),
-                BUTTON_LEFT,
-                btn -> {
-                    System.out.println("[DockyardUpgradeTab] Left button clicked (capture ship)"); // Клиентский лог
-                    NetworkHandler.CHANNEL.sendToServer(new C2SHandleBottleShipPacket(false)); // false = capture
-                },
-                () -> false
+                new Position(x + BUTTON1_X, y + BUTTON1_Y),
+                SLOT_BUTTON,
+                btn -> handleSlotButtonClick(0),
+                () -> hasShipInSlot(0)
         ));
 
-        // Правая кнопка (выпуск корабля)
+        // Правая кнопка (Слот 2)
         addHideableChild(new ToggleButton<>(
-                new Position(x + BUTTON2_X, y + BUTTONS_Y),
-                BUTTON_RIGHT,
-                btn -> {
-                    System.out.println("[DockyardUpgradeTab] Right button clicked (release ship)"); // Клиентский лог
-                    NetworkHandler.CHANNEL.sendToServer(new C2SHandleBottleShipPacket(true)); // true = release
-                },
-                () -> false
+                new Position(x + BUTTON2_X, y + BUTTON2_Y),
+                SLOT_BUTTON,
+                btn -> handleSlotButtonClick(1),
+                () -> hasShipInSlot(1)
         ));
+    }
+
+    // Проверка: есть ли корабль в слоте (заполнить из логики контейнера!)
+    private boolean hasShipInSlot(int slot) {
+        // TODO: заменить на логику проверки в контейнере/апгрейде
+        return getStoredShipName(slot) != null;
+    }
+
+    // Получить название корабля для слота (заполнить из логики контейнера!)
+    private String getStoredShipName(int slot) {
+        // TODO: получить название корабля по слоту из контейнера/апгрейда (например, через wrapper или напрямую)
+        // Вот пример заглушки:
+        // return slot == 0 ? "wrestler-hunger-health" : null;
+        return null;
+    }
+
+    // Клик по кнопке слота: если слот пустой — подобрать, иначе выпустить
+    private void handleSlotButtonClick(int slot) {
+        boolean hasShip = hasShipInSlot(slot);
+        // Передать на сервер номер слота и действие (подобрать/выпустить)
+        // Можно расширить пакет, если нужно больше слотов
+        NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
 
     @Override
@@ -120,20 +123,26 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             return;
         }
 
-        // Первая полоска с заглушкой
-        GuiHelper.blit(graphics, x + STRIP_X, y + STRIP1_Y, EDIT_ITEM_NAME_BACKGROUND, 100, 16);
+        // Слот 1: поле и название корабля (или пустое/неактивное)
+        boolean slot1HasShip = hasShipInSlot(0);
+        TextureBlitData field1 = slot1HasShip ? FIELD_ACTIVE : FIELD_INACTIVE;
+        GuiHelper.blit(graphics, x + FIELD1_X, y + FIELD1_Y, field1, FIELD_WIDTH, FIELD_HEIGHT);
+        String name1 = getStoredShipName(0);
         graphics.drawString(Minecraft.getInstance().font,
-                Component.literal("Заглушка 1"),
-                x + STRIP_X + 6,
-                y + STRIP1_Y + 4,
+                name1 == null ? "" : name1,
+                x + FIELD1_X + 6,
+                y + FIELD1_Y + 4,
                 0x404040, false);
 
-        // Вторая полоска с заглушкой
-        GuiHelper.blit(graphics, x + STRIP_X, y + STRIP2_Y, EDIT_ITEM_NAME_BACKGROUND_DISABLED, 100, 16);
+        // Слот 2: поле и название корабля (или пустое/неактивное)
+        boolean slot2HasShip = hasShipInSlot(1);
+        TextureBlitData field2 = slot2HasShip ? FIELD_ACTIVE : FIELD_INACTIVE;
+        GuiHelper.blit(graphics, x + FIELD2_X, y + FIELD2_Y, field2, FIELD_WIDTH, FIELD_HEIGHT);
+        String name2 = getStoredShipName(1);
         graphics.drawString(Minecraft.getInstance().font,
-                Component.literal("Заглушка 2"),
-                x + STRIP_X + 6,
-                y + STRIP2_Y + 4,
+                name2 == null ? "" : name2,
+                x + FIELD2_X + 6,
+                y + FIELD2_Y + 4,
                 0x404040, false);
     }
 

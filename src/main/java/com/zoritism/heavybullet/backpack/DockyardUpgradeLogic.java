@@ -19,7 +19,6 @@ import java.util.UUID;
 public class DockyardUpgradeLogic {
 
     /**
-     * Обработка нажатия на кнопку "Bottle Ship"
      * @param player игрок
      * @param release true = выпуск, false = захват
      */
