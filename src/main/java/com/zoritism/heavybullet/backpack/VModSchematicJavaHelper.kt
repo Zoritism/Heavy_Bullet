@@ -54,7 +54,30 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Сохранить корабль в NBT (забрать в рюкзак)
+     * Проверка расстояния до ближайшей точки корабля (AABB).
+     */
+    private fun isShipWithinDistance(player: ServerPlayer, ship: DockyardUpgradeLogic.ServerShipHandle, maxDistance: Double): Boolean {
+        val playerPos = player.eyePosition
+        val shipObj = ship.getServerShip()
+        val aabb = try { shipObj.javaClass.getMethod("getWorldAABB").invoke(shipObj) } catch (_: Exception) { null }
+        if (aabb != null) {
+            val minX = aabb.javaClass.getMethod("minX").invoke(aabb) as Double
+            val maxX = aabb.javaClass.getMethod("maxX").invoke(aabb) as Double
+            val minY = aabb.javaClass.getMethod("minY").invoke(aabb) as Double
+            val maxY = aabb.javaClass.getMethod("maxY").invoke(aabb) as Double
+            val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
+            val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
+            val dx = maxOf(minX - playerPos.x, 0.0, playerPos.x - maxX)
+            val dy = maxOf(minY - playerPos.y, 0.0, playerPos.y - maxY)
+            val dz = maxOf(minZ - playerPos.z, 0.0, playerPos.z - maxZ)
+            val dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+            return dist <= maxDistance
+        }
+        return false
+    }
+
+    /**
+     * Сохранить корабль в NBT (забрать в рюкзак), с атомарностью и защитой от дюпов.
      * @return true если успешно, иначе false
      */
     @JvmStatic
@@ -66,31 +89,13 @@ object VModSchematicJavaHelper {
         ship: DockyardUpgradeLogic.ServerShipHandle,
         nbt: CompoundTag
     ): Boolean {
-        // Не даём забирать корабль если в рюкзаке уже есть другой
+        // Нельзя если уже есть корабль
         if (com.zoritism.heavybullet.backpack.DockyardDataHelper.hasShipInBackpack(backpack)) {
             return false
         }
-
-        // Проверяем расстояние до игрока (максимум 4 блока)
-        val playerPos = player.eyePosition
-        val shipObj = ship.getServerShip()
-        val aabb = try { shipObj.javaClass.getMethod("getWorldAABB").invoke(shipObj) } catch (_: Exception) { null }
-        if (aabb != null) {
-            val minX = aabb.javaClass.getMethod("minX").invoke(aabb) as Double
-            val maxX = aabb.javaClass.getMethod("maxX").invoke(aabb) as Double
-            val minY = aabb.javaClass.getMethod("minY").invoke(aabb) as Double
-            val maxY = aabb.javaClass.getMethod("maxY").invoke(aabb) as Double
-            val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
-            val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
-            val center = Vec3((minX + maxX) / 2.0, (minY + maxY) / 2.0, (minZ + maxZ) / 2.0)
-            // Реально ближайшее расстояние до бокса, а не центра
-            val dx = maxOf(minX - playerPos.x, 0.0, playerPos.x - maxX)
-            val dy = maxOf(minY - playerPos.y, 0.0, playerPos.y - maxY)
-            val dz = maxOf(minZ - playerPos.z, 0.0, playerPos.z - maxZ)
-            val dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
-            if (dist > 4.0) {
-                return false
-            }
+        // Нельзя если корабль далеко
+        if (!isShipWithinDistance(player, ship, 4.0)) {
+            return false
         }
 
         // Сохраняем в NBT
@@ -100,12 +105,11 @@ object VModSchematicJavaHelper {
         // Только если успешно — сохраняем в рюкзак
         com.zoritism.heavybullet.backpack.DockyardDataHelper.saveShipToBackpack(backpack, nbt)
 
-        // Удаляем из мира, если только что успешно сохранили в NBT и записали в рюкзак
+        // Удаляем из мира: если не получилось — откатываем NBT
         val removeResult = try {
             removeShip(level, ship)
             true
         } catch (_: Exception) {
-            // Если не удалили — очищаем NBT в рюкзаке, чтобы не было дюпа
             com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
             false
         }
@@ -137,7 +141,7 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Спавн корабля из NBT (в мир из рюкзака)
+     * Спавн корабля из NBT (в мир из рюкзака) с атомарностью: если не получилось — не очищать NBT.
      * @return true если успешно, иначе false
      */
     @JvmStatic
@@ -170,7 +174,7 @@ object VModSchematicJavaHelper {
                 }
             }
         }
-        // Спавним
+        // Спавним (использует проверку расстояния, коллизий и т.д.)
         val success = spawnShipFromNBT(level, player, uuid, player.position(), nbt)
         if (success) {
             com.zoritism.heavybullet.backpack.DockyardDataHelper.clearShipFromBackpack(backpack)
