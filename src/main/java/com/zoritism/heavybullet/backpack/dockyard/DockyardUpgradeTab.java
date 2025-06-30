@@ -15,20 +15,16 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.GuiHelper;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.Position;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.TextureBlitData;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
 
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeTab");
-
-    private static final int TAB_WIDTH = 92;
+    private static final int TAB_WIDTH = 103;
     private static final int TAB_HEIGHT = 92;
     private static final int BODY_HEIGHT = 92;
 
-    // Поля для кораблей (как в AnvilUpgradeTab, только чуть короче)
+    // Поле чуть короче, как у AnvilUpgradeTab (84x16)
     private static final int FIELD_WIDTH = 84;
     private static final int FIELD_HEIGHT = 16;
 
@@ -39,7 +35,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             GuiHelper.GUI_CONTROLS, Dimension.SQUARE_256, new UV(28, 115), new Dimension(FIELD_WIDTH, FIELD_HEIGHT)
     );
 
-    // Кнопка: правая текстура если слот пустой, левая если корабль есть
+    // Кнопка: синяя если слот пустой, оранжевая если в слоте корабль
     private static final ButtonDefinition.Toggle<Boolean> SLOT_BUTTON = ButtonDefinitions.createToggleButtonDefinition(
             Map.of(
                     false, GuiHelper.getButtonStateData(
@@ -49,7 +45,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                             new Position(1, 1)
                     ),
                     true, GuiHelper.getButtonStateData(
-                            new UV(112, 48),
+                            new UV(128, 48),
                             "",
                             Dimension.SQUARE_16,
                             new Position(1, 1)
@@ -57,19 +53,14 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             )
     );
 
-    // Позиции
-    private static final int FIELD1_X = 6;
-    private static final int FIELD1_Y = 24;
-    private static final int FIELD2_X = 6;
-    private static final int FIELD2_Y = FIELD1_Y + 22;
+    // Позиции оставляем как в старом интерфейсе
+    private static final int FIELD_X = 5;
+    private static final int FIELD1_Y = 25;
+    private static final int FIELD2_Y = FIELD1_Y + 18;
 
-    private static final int BUTTON1_X = FIELD1_X + FIELD_WIDTH + 4;
-    private static final int BUTTON1_Y = FIELD1_Y;
-    private static final int BUTTON2_X = FIELD2_X + FIELD_WIDTH + 4;
-    private static final int BUTTON2_Y = FIELD2_Y;
-
-    private ToggleButton<Boolean> btn1;
-    private ToggleButton<Boolean> btn2;
+    private static final int BUTTON1_X = 5;
+    private static final int BUTTON2_X = 5 + 20;
+    private static final int BUTTONS_Y = FIELD2_Y + 24;
 
     public DockyardUpgradeTab(DockyardUpgradeContainer upgradeContainer, Position position, StorageScreenBase<?> screen) {
         super(upgradeContainer, position, screen,
@@ -78,53 +69,44 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
         openTabDimension = new Dimension(TAB_WIDTH, TAB_HEIGHT);
 
-        // Левая кнопка (Слот 1)
-        btn1 = new ToggleButton<>(
-                new Position(x + BUTTON1_X, y + BUTTON1_Y),
+        // Кнопка для первого слота (слот 0)
+        addHideableChild(new ToggleButton<>(
+                new Position(x + BUTTON1_X, y + BUTTONS_Y),
                 SLOT_BUTTON,
-                btn -> {
-                    LOGGER.info("[DockyardUpgradeTab] Кнопка slot=0 нажата!");
-                    Minecraft.getInstance().player.sendSystemMessage(Component.literal("Click: slot=0"));
-                    handleSlotButtonClick(0);
-                },
+                btn -> handleSlotButtonClick(0),
                 () -> hasShipInSlot(0)
-        );
-        addHideableChild(btn1);
+        ));
 
-        // Правая кнопка (Слот 2)
-        btn2 = new ToggleButton<>(
-                new Position(x + BUTTON2_X, y + BUTTON2_Y),
+        // Кнопка для второго слота (слот 1)
+        addHideableChild(new ToggleButton<>(
+                new Position(x + BUTTON2_X, y + BUTTONS_Y),
                 SLOT_BUTTON,
-                btn -> {
-                    LOGGER.info("[DockyardUpgradeTab] Кнопка slot=1 нажата!");
-                    Minecraft.getInstance().player.sendSystemMessage(Component.literal("Click: slot=1"));
-                    handleSlotButtonClick(1);
-                },
+                btn -> handleSlotButtonClick(1),
                 () -> hasShipInSlot(1)
-        );
-        addHideableChild(btn2);
+        ));
     }
 
-    // Проверка: есть ли корабль в слоте (заполнить из логики контейнера/апгрейда!)
+    // Проверка наличия корабля в слоте
     private boolean hasShipInSlot(int slot) {
-        // TODO: заменить на логику проверки в контейнере/апгрейде
-        return getStoredShipName(slot) != null;
+        // TODO: заменить на реальную логику
+        // Для теста: слот 0 всегда корабль, слот 1 всегда пустой
+        return slot == 0;
     }
 
-    // Получить название корабля для слота (заполнить из логики контейнера/апгрейда!)
+    // Получить название корабля для слота (или пусто, если нет)
     private String getStoredShipName(int slot) {
-        // TODO: получить название корабля по слоту из контейнера/апгрейда (например, через wrapper или напрямую)
-        // Для теста: всегда возвращаем строку для первого слота, чтобы проверить работоспособность UI/кнопки
-        if (slot == 0) {
-            return "TEST_SHIP";
+        // TODO: заменить на реальную логику
+        if (hasShipInSlot(slot)) {
+            return "wrestler-hunger-health";
+        } else {
+            return "";
         }
-        return null;
     }
 
-    // Клик по кнопке слота: если слот пустой — подобрать, иначе выпустить
+    // Клик по кнопке: если слот пустой — подобрать, если есть корабль — выпустить
     private void handleSlotButtonClick(int slot) {
         boolean hasShip = hasShipInSlot(slot);
-        LOGGER.info("[handleSlotButtonClick] slot={}, hasShip={}, sending packet...", slot, hasShip);
+        // Если пусто — собрать корабль (release=false), если есть — выпустить (release=true)
         NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
 
@@ -141,25 +123,25 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             return;
         }
 
-        // Слот 1: поле и название корабля (или пустое/неактивное)
+        // Поле 1 (верхнее)
         boolean slot1HasShip = hasShipInSlot(0);
         TextureBlitData field1 = slot1HasShip ? FIELD_ACTIVE : FIELD_INACTIVE;
-        GuiHelper.blit(graphics, x + FIELD1_X, y + FIELD1_Y, field1, FIELD_WIDTH, FIELD_HEIGHT);
+        GuiHelper.blit(graphics, x + FIELD_X, y + FIELD1_Y, field1, FIELD_WIDTH, FIELD_HEIGHT);
         String name1 = getStoredShipName(0);
         graphics.drawString(Minecraft.getInstance().font,
-                name1 == null ? "" : name1,
-                x + FIELD1_X + 6,
+                name1,
+                x + FIELD_X + 6,
                 y + FIELD1_Y + 4,
                 0x404040, false);
 
-        // Слот 2: поле и название корабля (или пустое/неактивное)
+        // Поле 2 (нижнее)
         boolean slot2HasShip = hasShipInSlot(1);
         TextureBlitData field2 = slot2HasShip ? FIELD_ACTIVE : FIELD_INACTIVE;
-        GuiHelper.blit(graphics, x + FIELD2_X, y + FIELD2_Y, field2, FIELD_WIDTH, FIELD_HEIGHT);
+        GuiHelper.blit(graphics, x + FIELD_X, y + FIELD2_Y, field2, FIELD_WIDTH, FIELD_HEIGHT);
         String name2 = getStoredShipName(1);
         graphics.drawString(Minecraft.getInstance().font,
-                name2 == null ? "" : name2,
-                x + FIELD2_X + 6,
+                name2,
+                x + FIELD_X + 6,
                 y + FIELD2_Y + 4,
                 0x404040, false);
     }
