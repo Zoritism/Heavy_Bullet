@@ -22,6 +22,12 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
 import java.lang.reflect.Method;
 import java.util.Map;
 
+/**
+ * DockyardUpgradeTab:
+ * - Всегда показывает актуальное содержимое как для блока, так и для предмета рюкзака.
+ * - В режиме блока использует persistentData блок-сущности, для предмета — NBT предмета.
+ * - Кнопки корректно работают для сбора/выпуска корабля в каждом слоте.
+ */
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
 
     private static final int TAB_WIDTH = 103;
@@ -84,57 +90,35 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         ));
     }
 
-    private boolean hasShipInSlot(int slot) {
-        WrapperOrBlockData data = getDataSource();
-        if (data == null) return false;
-        if (data.be != null) {
-            return DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
-        } else if (data.stack != null) {
-            return DockyardDataHelper.hasShipInBackpackSlot(data.stack, slot);
+    /**
+     * Класс-обёртка: либо блок, либо предмет. Только один из них не null.
+     */
+    private static class WrapperOrBlockData {
+        final BlockEntity be;
+        final ItemStack stack;
+        WrapperOrBlockData(BlockEntity be, ItemStack stack) {
+            this.be = be;
+            this.stack = stack;
         }
-        return false;
     }
 
-    private String getStoredShipName(int slot) {
-        WrapperOrBlockData data = getDataSource();
-        if (data == null) return "";
-        CompoundTag tag = null;
-        if (data.be != null) {
-            CompoundTag ship = DockyardDataHelper.getShipFromBlockSlot(data.be, slot);
-            if (ship != null) tag = ship;
-        } else if (data.stack != null) {
-            CompoundTag ship = DockyardDataHelper.getShipFromBackpackSlot(data.stack, slot);
-            if (ship != null) tag = ship;
-        }
-        if (tag != null) {
-            if (tag.contains("vs_ship_name")) {
-                return tag.getString("vs_ship_name");
-            }
-            if (tag.contains("vs_ship_id")) {
-                return "id:" + tag.getLong("vs_ship_id");
-            }
-            return "<ship>";
-        }
-        return "";
-    }
-
-    private void handleSlotButtonClick(int slot) {
-        boolean hasShip = hasShipInSlot(slot);
-        NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
-    }
-
+    /**
+     * Получить источник данных: если открыт блок — BlockEntity, иначе ItemStack.
+     */
     private WrapperOrBlockData getDataSource() {
         try {
             DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
             if (wrapper != null) {
-                // ВАЖНО: используем поле storageWrapper напрямую!
-                IStorageWrapper sw = wrapper.storageWrapper;
+                IStorageWrapper sw = wrapper.getStorageWrapper();
                 BlockEntity be = getBlockEntityFromWrapper(sw);
                 if (be != null) return new WrapperOrBlockData(be, null);
                 ItemStack stack = getItemStackFromWrapper(sw);
                 if (stack != null) return new WrapperOrBlockData(null, stack);
             }
         } catch (Exception ignored) {}
+        // Fallback: если нет контейнера — используем ItemStack из main hand (клиентский просмотр)
+        ItemStack handStack = getBackpack();
+        if (!handStack.isEmpty()) return new WrapperOrBlockData(null, handStack);
         return null;
     }
 
@@ -160,17 +144,66 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         return null;
     }
 
-    private static class WrapperOrBlockData {
-        final BlockEntity be;
-        final ItemStack stack;
-        WrapperOrBlockData(BlockEntity be, ItemStack stack) {
-            this.be = be;
-            this.stack = stack;
+    /**
+     * Проверка наличия корабля в слоте (универсально для блока и предмета)
+     */
+    private boolean hasShipInSlot(int slot) {
+        WrapperOrBlockData data = getDataSource();
+        if (data == null) return false;
+        if (data.be != null) {
+            return DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
+        } else if (data.stack != null) {
+            return DockyardDataHelper.hasShipInBackpackSlot(data.stack, slot);
         }
+        return false;
+    }
+
+    /**
+     * Получить название корабля для слота (универсально для блока и предмета)
+     */
+    private String getStoredShipName(int slot) {
+        WrapperOrBlockData data = getDataSource();
+        if (data == null) return "";
+        CompoundTag tag = null;
+        if (data.be != null) {
+            CompoundTag ship = DockyardDataHelper.getShipFromBlockSlot(data.be, slot);
+            if (ship != null) tag = ship;
+        } else if (data.stack != null) {
+            CompoundTag ship = DockyardDataHelper.getShipFromBackpackSlot(data.stack, slot);
+            if (ship != null) tag = ship;
+        }
+        if (tag != null) {
+            if (tag.contains("vs_ship_name")) {
+                return tag.getString("vs_ship_name");
+            }
+            if (tag.contains("vs_ship_id")) {
+                return "id:" + tag.getLong("vs_ship_id");
+            }
+            return "<ship>";
+        }
+        return "";
+    }
+
+    /**
+     * Получить рюкзак игрока (только для клиентского быстрого просмотра, если нет GUI-контейнера)
+     */
+    private ItemStack getBackpack() {
+        return Minecraft.getInstance().player != null ? Minecraft.getInstance().player.getMainHandItem() : ItemStack.EMPTY;
+    }
+
+    /**
+     * Клик по кнопке: если слот пустой — подобрать (release=false), если есть корабль — выпустить (release=true)
+     */
+    private void handleSlotButtonClick(int slot) {
+        boolean hasShip = hasShipInSlot(slot);
+        // Если пусто — собрать корабль (release=false), если есть — выпустить (release=true)
+        NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
 
     @Override
-    protected void moveSlotsToTab() {}
+    protected void moveSlotsToTab() {
+        // Нет собственных слотов в этой вкладке
+    }
 
     @Override
     protected void renderBg(GuiGraphics graphics, Minecraft minecraft, int mouseX, int mouseY) {
@@ -180,6 +213,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             return;
         }
 
+        // Слот 0 (верхний)
         boolean slot1HasShip = hasShipInSlot(0);
         TextureBlitData field1 = slot1HasShip ? FIELD_ACTIVE : FIELD_INACTIVE;
         GuiHelper.blit(graphics, x + FIELD_X, y + FIELD1_Y, field1, FIELD_WIDTH, FIELD_HEIGHT);
@@ -190,6 +224,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                 y + FIELD1_Y + 4,
                 0x404040, false);
 
+        // Слот 1 (нижний)
         boolean slot2HasShip = hasShipInSlot(1);
         TextureBlitData field2 = slot2HasShip ? FIELD_ACTIVE : FIELD_INACTIVE;
         GuiHelper.blit(graphics, x + FIELD_X, y + FIELD2_Y, field2, FIELD_WIDTH, FIELD_HEIGHT);

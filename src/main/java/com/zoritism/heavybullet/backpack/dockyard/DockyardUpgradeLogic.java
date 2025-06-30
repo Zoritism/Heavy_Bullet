@@ -45,6 +45,7 @@ public class DockyardUpgradeLogic {
             return;
         }
 
+        // === RELEASE logic ===
         if (release) {
             LOGGER.info("[handleDockyardShipClick] Trying to release ship from backpack slot {}", slotIndex);
             CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpackSlot(backpack, slotIndex);
@@ -61,37 +62,38 @@ public class DockyardUpgradeLogic {
                 LOGGER.info("[handleDockyardShipClick] No ship stored in backpack slot {}", slotIndex);
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_stored"), true);
             }
-        } else {
-            LOGGER.info("[handleDockyardShipClick] Trying to store ship in backpack slot {}", slotIndex);
-            // Запрет: если этот слот уже занят, запрещаем захват нового корабля в этот слот
-            if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slotIndex)) {
-                LOGGER.warn("[handleDockyardShipClick] Backpack slot {} already has ship, cannot store another", slotIndex);
-                player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
-                return;
-            }
-            ServerShipHandle ship = findShipPlayerIsLookingAt(player, 4.0); // Только с 4 блоков!
-            LOGGER.info("[handleDockyardShipClick] findShipPlayerIsLookingAt result: {}", ship != null ? "found" : "not found");
-            if (ship != null) {
-                CompoundTag shipNbt = new CompoundTag();
-                boolean result = saveShipToNbt(ship, shipNbt, player);
-                LOGGER.info("[handleDockyardShipClick] saveShipToNbt result: {}", result);
-                if (result) {
-                    DockyardDataHelper.saveShipToBackpackSlot(backpack, shipNbt, slotIndex);
-                    boolean removed = removeShipFromWorld(ship, player);
-                    LOGGER.info("[handleDockyardShipClick] removeShipFromWorld result: {}", removed);
-                    if (removed) {
-                        player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
-                    } else {
-                        DockyardDataHelper.clearShipFromBackpackSlot(backpack, slotIndex);
-                        player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.remove_failed"), true);
-                    }
+            return; // release обработан, не продолжаем дальше
+        }
+
+        // === STORE logic ===
+        LOGGER.info("[handleDockyardShipClick] Trying to store ship in backpack slot {}", slotIndex);
+        if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slotIndex)) {
+            LOGGER.warn("[handleDockyardShipClick] Backpack slot {} already has ship, cannot store another", slotIndex);
+            player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
+            return;
+        }
+        ServerShipHandle ship = findShipPlayerIsLookingAt(player, 4.0); // Только с 4 блоков!
+        LOGGER.info("[handleDockyardShipClick] findShipPlayerIsLookingAt result: {}", ship != null ? "found" : "not found");
+        if (ship != null) {
+            CompoundTag shipNbt = new CompoundTag();
+            boolean result = saveShipToNbt(ship, shipNbt, player);
+            LOGGER.info("[handleDockyardShipClick] saveShipToNbt result: {}", result);
+            if (result) {
+                DockyardDataHelper.saveShipToBackpackSlot(backpack, shipNbt, slotIndex);
+                boolean removed = removeShipFromWorld(ship, player);
+                LOGGER.info("[handleDockyardShipClick] removeShipFromWorld result: {}", removed);
+                if (removed) {
+                    player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
                 } else {
-                    player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.save_failed"), true);
+                    DockyardDataHelper.clearShipFromBackpackSlot(backpack, slotIndex);
+                    player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.remove_failed"), true);
                 }
             } else {
-                LOGGER.info("[handleDockyardShipClick] No ship found in sight");
-                player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_found"), true);
+                player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.save_failed"), true);
             }
+        } else {
+            LOGGER.info("[handleDockyardShipClick] No ship found in sight");
+            player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_found"), true);
         }
     }
 
