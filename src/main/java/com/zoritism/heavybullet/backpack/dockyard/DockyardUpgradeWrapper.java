@@ -16,6 +16,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
 import java.util.function.Consumer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * DockyardUpgradeWrapper:
@@ -26,6 +28,8 @@ import java.util.function.Consumer;
  */
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem>
         implements ITickableUpgrade {
+
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeWrapper");
 
     // Ключи для временных процессных данных в persistentData блока
     private static final String NBT_PROCESS_ACTIVE = "DockyardProcessActive";
@@ -53,8 +57,18 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         try {
             Method m = storageWrapper.getClass().getMethod("getStack");
             Object stack = m.invoke(storageWrapper);
+            ItemStack handStack = getMainHandForLog();
+            LOGGER.info("[DockyardUpgradeWrapper] getStorageItemStack: storageWrapper={}, stack={}, NBT={}, MainHandStack={}, MainHandNBT={}",
+                    storageWrapper,
+                    stack,
+                    (stack instanceof ItemStack s && s.hasTag()) ? s.getTag() : "no NBT",
+                    handStack,
+                    handStack != null && handStack.hasTag() ? handStack.getTag() : "no NBT"
+            );
             if (stack instanceof ItemStack s) return s;
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            LOGGER.error("[DockyardUpgradeWrapper] getStorageItemStack exception: ", e);
+        }
         return null;
     }
 
@@ -64,9 +78,26 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         try {
             Method m = storageWrapper.getClass().getMethod("getBlockEntity");
             Object be = m.invoke(storageWrapper);
+            LOGGER.info("[DockyardUpgradeWrapper] getStorageBlockEntity: storageWrapper={}, blockEntity={}", storageWrapper, be);
             if (be instanceof BlockEntity blockEntity) return blockEntity;
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            LOGGER.error("[DockyardUpgradeWrapper] getStorageBlockEntity exception: ", e);
+        }
         return null;
+    }
+
+    private ItemStack getMainHandForLog() {
+        try {
+            // Only try on client (for UI) or use reflection/safe code in server context
+            // This is just for debug; if not available, ignore
+            Class<?> mcClass = Class.forName("net.minecraft.client.Minecraft");
+            Object mc = mcClass.getMethod("getInstance").invoke(null);
+            Object player = mcClass.getField("player").get(mc);
+            if (player != null) {
+                return (ItemStack) player.getClass().getMethod("getMainHandItem").invoke(player);
+            }
+        } catch (Throwable ignored) {}
+        return ItemStack.EMPTY;
     }
 
     @Override
@@ -76,11 +107,16 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     @Override
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
+        LOGGER.info("[DockyardUpgradeWrapper] tick called. entity={}, level={}, blockPos={}", entity, level, blockPos);
+
         // Работает только для блока, только на сервере
         if (level.isClientSide || blockPos == null) return;
 
         BlockEntity be = getStorageBlockEntity();
-        if (be == null) return;
+        if (be == null) {
+            LOGGER.warn("[DockyardUpgradeWrapper] tick: BlockEntity is null for blockPos={}", blockPos);
+            return;
+        }
         CompoundTag tag = getPersistentData(be);
 
         // Автоматически переносить корабли из предмета в persistentData при первом запуске блока
@@ -100,9 +136,11 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             // Проверка: корабль всё ещё есть сверху?
             DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, blockPos, SHIP_RAY_DIST);
             boolean shipValid = ship != null && ship.getId() == shipId;
+            LOGGER.info("[DockyardUpgradeWrapper] tick: process active, ticks={}, shipId={}, slot={}, shipValid={}", ticks, shipId, slot, shipValid);
             if (!shipValid) {
                 // Остановить процесс
                 clearProcess(tag, be);
+                LOGGER.info("[DockyardUpgradeWrapper] tick: process stopped, ship not valid.");
                 return;
             }
 
@@ -116,6 +154,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 if (result) {
                     DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
                     DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
+                    LOGGER.info("[DockyardUpgradeWrapper] tick: ship saved to block slot {} and removed from world.", slot);
                 }
                 clearProcess(tag, be);
             }
@@ -123,6 +162,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     private void clearProcess(CompoundTag tag, BlockEntity be) {
+        LOGGER.info("[DockyardUpgradeWrapper] clearProcess for BlockEntity={}", be);
         tag.putBoolean(NBT_PROCESS_ACTIVE, false);
         tag.putInt(NBT_PROCESS_TICKS, 0);
         tag.putLong(NBT_PROCESS_SHIP_ID, 0L);
@@ -134,19 +174,27 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
      * Запускает процесс поглощения корабля блоком рюкзака (блоковый режим!).
      */
     public void startBlockShipInsert(Level level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, int slot) {
+        LOGGER.info("[DockyardUpgradeWrapper] startBlockShipInsert: level={}, blockPos={}, ship={}, slot={}", level, blockPos, ship, slot);
         if (level.isClientSide || blockPos == null || ship == null) return;
         BlockEntity be = getStorageBlockEntity();
-        if (be == null) return;
+        if (be == null) {
+            LOGGER.warn("[DockyardUpgradeWrapper] startBlockShipInsert: BlockEntity is null for blockPos={}", blockPos);
+            return;
+        }
         CompoundTag tag = getPersistentData(be);
 
         // Если в этом слоте уже есть корабль – не начинать процесс
-        if (DockyardDataHelper.hasShipInBlockSlot(be, slot)) return;
+        if (DockyardDataHelper.hasShipInBlockSlot(be, slot)) {
+            LOGGER.warn("[DockyardUpgradeWrapper] startBlockShipInsert: slot {} already has ship!", slot);
+            return;
+        }
 
         tag.putBoolean(NBT_PROCESS_ACTIVE, true);
         tag.putInt(NBT_PROCESS_TICKS, 0);
         tag.putLong(NBT_PROCESS_SHIP_ID, ship.getId());
         tag.putInt(NBT_PROCESS_SLOT, slot);
         be.setChanged();
+        LOGGER.info("[DockyardUpgradeWrapper] startBlockShipInsert: process started for slot {}", slot);
     }
 
     /**
@@ -156,10 +204,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         try {
             Method m = blockEntity.getClass().getMethod("getPersistentData");
             Object result = m.invoke(blockEntity);
+            LOGGER.info("[DockyardUpgradeWrapper] getPersistentData: blockEntity={}, persistentData={}", blockEntity, result);
             if (result instanceof CompoundTag tag) {
                 return tag;
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            LOGGER.error("[DockyardUpgradeWrapper] getPersistentData exception: ", e);
+        }
         // Fallback: не найдено поле persistentData, используем временный тег (данные не сохранятся)
         return new CompoundTag();
     }
@@ -170,25 +221,30 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
      */
     private void syncBackpackShipsToBlock(BlockEntity be) {
         try {
-            // Если persistentData уже заполнен – ничего не делаем
             boolean hasShips = DockyardDataHelper.hasShipInBlockSlot(be, 0) ||
                     DockyardDataHelper.hasShipInBlockSlot(be, 1);
+            LOGGER.info("[DockyardUpgradeWrapper] syncBackpackShipsToBlock: hasShipsInBlock0={}, hasShipsInBlock1={}",
+                    DockyardDataHelper.hasShipInBlockSlot(be, 0), DockyardDataHelper.hasShipInBlockSlot(be, 1));
             if (hasShips) return;
 
             // Получить предмет рюкзака из блока
             ItemStack backpack = getBackpackItemFromBlockEntity(be);
+            LOGGER.info("[DockyardUpgradeWrapper] syncBackpackShipsToBlock: backpack={}, NBT={}", backpack, (backpack != null && backpack.hasTag()) ? backpack.getTag() : "no NBT");
             if (backpack == null || !backpack.hasTag()) return;
 
             for (int slot = 0; slot <= 1; slot++) {
                 if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slot)) {
                     CompoundTag ship = DockyardDataHelper.getShipFromBackpackSlot(backpack, slot);
+                    LOGGER.info("[DockyardUpgradeWrapper] syncBackpackShipsToBlock: moving ship from backpack slot {} to block", slot);
                     if (ship != null) {
                         DockyardDataHelper.saveShipToBlockSlot(be, ship, slot);
                         DockyardDataHelper.clearShipFromBackpackSlot(backpack, slot);
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            LOGGER.error("[DockyardUpgradeWrapper] syncBackpackShipsToBlock exception: ", e);
+        }
     }
 
     /**
@@ -200,10 +256,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         try {
             var method = be.getClass().getMethod("getItem", int.class);
             Object result = method.invoke(be, 0);
+            LOGGER.info("[DockyardUpgradeWrapper] getBackpackItemFromBlockEntity: blockEntity={}, result={}, NBT={}", be, result, (result instanceof ItemStack s && s.hasTag()) ? s.getTag() : "no NBT");
             if (result instanceof ItemStack stack) {
                 return stack;
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            LOGGER.error("[DockyardUpgradeWrapper] getBackpackItemFromBlockEntity exception: ", e);
+        }
         return null;
     }
 
@@ -258,9 +317,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
                 double maxY = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
                 double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
+                LOGGER.info("[DockyardUpgradeWrapper] tryGetShipAABB: AABB=({}, {}, {}, {}, {}, {})", minX, minY, minZ, maxX, maxY, maxZ);
                 return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            LOGGER.error("[DockyardUpgradeWrapper] tryGetShipAABB exception: ", e);
+        }
         return null;
     }
 

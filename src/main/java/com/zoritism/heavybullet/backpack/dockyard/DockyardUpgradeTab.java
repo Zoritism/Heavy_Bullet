@@ -21,6 +21,8 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
 
 import java.lang.reflect.Method;
 import java.util.Map;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * DockyardUpgradeTab:
@@ -29,6 +31,8 @@ import java.util.Map;
  * - Кнопки корректно работают для сбора/выпуска корабля в каждом слоте.
  */
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
+
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeTab");
 
     private static final int TAB_WIDTH = 103;
     private static final int TAB_HEIGHT = 92;
@@ -104,18 +108,47 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     /**
      * Получить источник данных: если открыт блок — BlockEntity, иначе ItemStack (именно тот, который реально открыт в контейнере!).
+     * Добавлено подробное логирование для диагностики.
      */
     private WrapperOrBlockData getDataSource() {
         try {
             DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
             if (wrapper != null) {
                 BlockEntity be = wrapper.getStorageBlockEntity();
-                if (be != null) return new WrapperOrBlockData(be, null);
                 ItemStack stack = wrapper.getStorageItemStack();
-                if (stack != null) return new WrapperOrBlockData(null, stack);
+
+                // log both for debug
+                ItemStack handStack = getMainHandStack();
+
+                LOGGER.info("[DockyardUpgradeTab] getDataSource: BlockEntity={}, ItemStack={}, MainHandStack={}",
+                        be,
+                        stack == null ? "null" : stack + " | NBT: " + (stack.hasTag() ? stack.getTag() : "no NBT"),
+                        handStack == null ? "null" : handStack + " | NBT: " + (handStack.hasTag() ? handStack.getTag() : "no NBT")
+                );
+
+                if (be != null) {
+                    LOGGER.info("[DockyardUpgradeTab] Using BlockEntity for dockyard tab.");
+                    return new WrapperOrBlockData(be, null);
+                }
+                if (stack != null && !stack.isEmpty()) {
+                    LOGGER.info("[DockyardUpgradeTab] Using ItemStack for dockyard tab. Item: {}, NBT: {}", stack, stack.hasTag() ? stack.getTag() : "no NBT");
+                    return new WrapperOrBlockData(null, stack);
+                }
             }
-        } catch (Exception ignored) {}
-        return null;
+        } catch (Exception e) {
+            LOGGER.error("[DockyardUpgradeTab] getDataSource exception: ", e);
+        }
+        // Also log fallback for debug
+        ItemStack fallback = getMainHandStack();
+        LOGGER.warn("[DockyardUpgradeTab] Fallback: returning main hand stack: {} | NBT: {}", fallback, fallback.hasTag() ? fallback.getTag() : "no NBT");
+        return fallback != null && !fallback.isEmpty() ? new WrapperOrBlockData(null, fallback) : null;
+    }
+
+    private ItemStack getMainHandStack() {
+        if (Minecraft.getInstance().player != null) {
+            return Minecraft.getInstance().player.getMainHandItem();
+        }
+        return ItemStack.EMPTY;
     }
 
     /**
@@ -125,9 +158,13 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         WrapperOrBlockData data = getDataSource();
         if (data == null) return false;
         if (data.be != null) {
-            return DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
+            boolean result = DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
+            LOGGER.info("[DockyardUpgradeTab] hasShipInBlockSlot({}): {}", slot, result);
+            return result;
         } else if (data.stack != null) {
-            return DockyardDataHelper.hasShipInBackpackSlot(data.stack, slot);
+            boolean result = DockyardDataHelper.hasShipInBackpackSlot(data.stack, slot);
+            LOGGER.info("[DockyardUpgradeTab] hasShipInBackpackSlot({}): {}", slot, result);
+            return result;
         }
         return false;
     }
