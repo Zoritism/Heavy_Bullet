@@ -94,9 +94,111 @@ object VModSchematicJavaHelper {
         nbt: CompoundTag
     ): Boolean {
         LOGGER.info("[VModSchematicJavaHelper] spawnShipFromNBT called at pos ({}, {}, {}) for player={}", pos.x, pos.y, pos.z, player.gameProfile.name)
-        // В VMod/VS2 нет публичного API для создания корабля из NBT/id.
-        // Возвращаем false, чтобы избежать ошибок в логике.
-        return false
+        // Если в NBT есть schematic_name — используем paste
+        return try {
+            if (!nbt.contains("schematic_name")) {
+                LOGGER.warn("[VModSchematicJavaHelper] NBT does not contain schematic_name.")
+                return false
+            }
+            val schematicName = nbt.getString("schematic_name")
+            spawnShipFromSchematic(player, schematicName)
+        } catch (e: Exception) {
+            LOGGER.error("[VModSchematicJavaHelper] Exception in spawnShipFromNBT: ", e)
+            false
+        }
+    }
+
+    /**
+     * Сохраняет корабль в виде схемы (VMod Schematic API) и кладёт имя схемы в NBT.
+     * Имя схемы: hb_ship_<UUID>
+     */
+    @JvmStatic
+    fun saveShipAsSchematic(
+        player: ServerPlayer,
+        ship: DockyardUpgradeLogic.ServerShipHandle,
+        schematicName: String
+    ): Boolean {
+        LOGGER.info("[VModSchematicJavaHelper] saveShipAsSchematic called for player={} shipId={} schematic={}", player.gameProfile.name, ship.getId(), schematicName)
+        return try {
+            val serverShip = ship.getServerShip()
+            // Получить AABB корабля
+            val aabb = serverShip.javaClass.getMethod("getWorldAABB").invoke(serverShip)
+            val minX = (aabb.javaClass.getMethod("minX").invoke(aabb) as Double).toInt()
+            val minY = (aabb.javaClass.getMethod("minY").invoke(aabb) as Double).toInt()
+            val minZ = (aabb.javaClass.getMethod("minZ").invoke(aabb) as Double).toInt()
+            val maxX = (aabb.javaClass.getMethod("maxX").invoke(aabb) as Double).toInt()
+            val maxY = (aabb.javaClass.getMethod("maxY").invoke(aabb) as Double).toInt()
+            val maxZ = (aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double).toInt()
+            val min = BlockPos(minX, minY, minZ)
+            val max = BlockPos(maxX, maxY, maxZ)
+            val level = player.serverLevel()
+            // VMod SchematicUtilsKt.createSchematicFromWorld(Level, BlockPos, BlockPos, String, boolean)
+            val schematicUtilsClass = Class.forName("net.spaceeye.vmod.schematic.SchematicUtilsKt")
+            val createSchematicFromWorld = schematicUtilsClass.getMethod(
+                "createSchematicFromWorld",
+                Class.forName("net.minecraft.world.level.Level"),
+                BlockPos::class.java,
+                BlockPos::class.java,
+                String::class.java,
+                java.lang.Boolean.TYPE
+            )
+            val schematic = createSchematicFromWorld.invoke(
+                null, level, min, max, schematicName, true
+            )
+            // Сохраняем схематик файл
+            val schematicIOClass = Class.forName("net.spaceeye.vmod.schematic.SchematicIOKt")
+            val saveSchematic = schematicIOClass.getMethod("saveSchematic", Class.forName("net.spaceeye.vmod.schematic.Schematic"), String::class.java)
+            val schematicPath = getSchematicPath(level.server.serverDirectory.absolutePath, schematicName)
+            saveSchematic.invoke(null, schematic, schematicPath)
+            LOGGER.info("[VModSchematicJavaHelper] Schematic '{}' saved at '{}'", schematicName, schematicPath)
+            true
+        } catch (e: Exception) {
+            LOGGER.error("[VModSchematicJavaHelper] Exception in saveShipAsSchematic: ", e)
+            false
+        }
+    }
+
+    /**
+     * Вставляет корабль из схемы в мир рядом с игроком.
+     */
+    @JvmStatic
+    fun spawnShipFromSchematic(
+        player: ServerPlayer,
+        schematicName: String
+    ): Boolean {
+        LOGGER.info("[VModSchematicJavaHelper] spawnShipFromSchematic called for player={}, schematic={}", player.gameProfile.name, schematicName)
+        return try {
+            val level = player.serverLevel()
+            val schematicIOClass = Class.forName("net.spaceeye.vmod.schematic.SchematicIOKt")
+            val loadSchematic = schematicIOClass.getMethod("loadSchematic", String::class.java)
+            val schematicPath = getSchematicPath(level.server.serverDirectory.absolutePath, schematicName)
+            val schematic = loadSchematic.invoke(null, schematicPath)
+            if (schematic == null) {
+                LOGGER.error("[VModSchematicJavaHelper] Cannot load schematic: $schematicPath")
+                return false
+            }
+            // pasteSchematic(Level, Schematic, BlockPos, Mirror, Rotation)
+            val schematicUtilsClass = Class.forName("net.spaceeye.vmod.schematic.SchematicUtilsKt")
+            val pasteSchematic = schematicUtilsClass.getMethod(
+                "pasteSchematic",
+                Class.forName("net.minecraft.world.level.Level"),
+                Class.forName("net.spaceeye.vmod.schematic.Schematic"),
+                BlockPos::class.java,
+                Class.forName("net.minecraft.world.level.block.Mirror"),
+                Class.forName("net.minecraft.world.level.block.Rotation")
+            )
+            val mirrorClass = Class.forName("net.minecraft.world.level.block.Mirror")
+            val rotationClass = Class.forName("net.minecraft.world.level.block.Rotation")
+            val mirrorNone = mirrorClass.getField("NONE").get(null)
+            val rotationNone = rotationClass.getField("NONE").get(null)
+            val pos = player.blockPosition().offset(1, 0, 0)
+            pasteSchematic.invoke(null, level, schematic, pos, mirrorNone, rotationNone)
+            LOGGER.info("[VModSchematicJavaHelper] Schematic '{}' pasted at {}", schematicName, pos)
+            true
+        } catch (e: Exception) {
+            LOGGER.error("[VModSchematicJavaHelper] Exception in spawnShipFromSchematic: ", e)
+            false
+        }
     }
 
     @JvmStatic
@@ -142,5 +244,12 @@ object VModSchematicJavaHelper {
         } catch (e: Exception) {
             LOGGER.error("[VModSchematicJavaHelper] Exception in removeShip: ", e)
         }
+    }
+
+    private fun getSchematicPath(serverDir: String, schematicName: String): String {
+        // world/vmod/schematics/<schematicName>.nbt
+        val folder = java.io.File(serverDir, "vmod/schematics")
+        folder.mkdirs()
+        return java.io.File(folder, "$schematicName.nbt").absolutePath
     }
 }

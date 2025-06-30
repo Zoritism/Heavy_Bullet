@@ -43,7 +43,7 @@ public class DockyardUpgradeLogic {
             if (shipNbt != null && shipNbt.contains("schematic_name")) {
                 String schematicName = shipNbt.getString("schematic_name");
                 LOGGER.info("[DockyardUpgrade] Schematic name in backpack: {}", schematicName);
-                boolean spawned = VModSchematicJavaHelper.spawnSchematicAtPlayer(player, schematicName);
+                boolean spawned = VModSchematicJavaHelper.spawnShipFromSchematic(player, schematicName);
                 if (spawned) {
                     DockyardDataHelper.clearShipFromBackpack(backpack);
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
@@ -116,7 +116,6 @@ public class DockyardUpgradeLogic {
 
         LOGGER.info("[DockyardUpgrade] Raytrace hit position: ({}, {}, {})", pos.x, pos.y, pos.z);
 
-        // Требуется vmod helper для поиска корабля по позиции!
         try {
             ServerShipHandle found = VModSchematicJavaHelper.findServerShip(level, BlockPos.containing(pos.x, pos.y, pos.z));
             LOGGER.info("[DockyardUpgrade] findServerShip returned: {}", found == null ? "null" : "id=" + found.getId());
