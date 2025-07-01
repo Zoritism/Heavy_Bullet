@@ -3,8 +3,6 @@ package com.zoritism.heavybullet.network;
 import com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeLogic;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.function.Supplier;
 
@@ -16,8 +14,6 @@ import java.util.function.Supplier;
 public class C2SHandleDockyardShipPacket {
     public final int slotIndex;
     public final boolean action; // false = собрать, true = выпустить
-
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/Network");
 
     public C2SHandleDockyardShipPacket(int slotIndex, boolean action) {
         this.slotIndex = slotIndex;
@@ -37,9 +33,7 @@ public class C2SHandleDockyardShipPacket {
 
     public static void handle(C2SHandleDockyardShipPacket pkt, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            LOGGER.info("[C2SHandleDockyardShipPacket] handle called: slotIndex={}, action={}", pkt.slotIndex, pkt.action);
             if (ctx.get().getSender() == null) {
-                LOGGER.warn("[C2SHandleDockyardShipPacket] Sender is null -- probably clientside or lost context!");
                 return;
             }
             try {
@@ -47,9 +41,8 @@ public class C2SHandleDockyardShipPacket {
                 // Если в слоте есть корабль, кнопка должна ВЫТАСКИВАТЬ корабль (release = true)
                 // Если в слоте нет корабля, кнопка должна ЗАСОВЫВАТЬ корабль (release = false)
                 DockyardUpgradeLogic.handleDockyardShipClick(ctx.get().getSender(), pkt.slotIndex, pkt.action);
-                LOGGER.info("[C2SHandleDockyardShipPacket] handleDockyardShipClick executed successfully.");
             } catch (Exception e) {
-                LOGGER.error("[C2SHandleDockyardShipPacket] Exception in handleDockyardShipClick: ", e);
+                // ignore
             }
         });
         ctx.get().setPacketHandled(true);

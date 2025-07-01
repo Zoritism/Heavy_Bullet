@@ -13,20 +13,12 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Переписано для хранения информации о кораблях в capability игрока (PlayerDockyardData).
- * Для блока рюкзака (BlockEntity) логика остаётся прежней.
- */
 public class DockyardUpgradeLogic {
-
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
 
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
         handleDockyardShipClick(player, 0, release);
@@ -58,6 +50,14 @@ public class DockyardUpgradeLogic {
             // ignore
         }
 
+        // Логируем: открыт ли как блок и координаты, если да
+        if (blockEntity != null) {
+            BlockPos bePos = blockEntity.getBlockPos();
+            System.out.println("[HeavyBullet] Dockyard opened as BLOCKENTITY at " + bePos);
+        } else {
+            System.out.println("[HeavyBullet] Dockyard opened as ITEM (capability)");
+        }
+
         // ==== BLOCKENTITY LOGIC ====
         if (blockEntity != null) {
             if (release) {
@@ -80,12 +80,11 @@ public class DockyardUpgradeLogic {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
-            // ОШИБКА БЫЛА ЗДЕСЬ: раньше корабль забирался мгновенно, теперь запускаем только процесс!
+            // Для blockentity ищем корабль строго над блоком, не рейтрейсом от игрока!
             ServerLevel serverLevel = player.serverLevel();
             BlockPos pos = blockEntity.getBlockPos();
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
             if (ship != null) {
-                // Проверяем, не запущен ли уже процесс для этого блока и слота
                 CompoundTag persistent = getOrCreatePersistentData(blockEntity);
                 boolean isActive = persistent.getBoolean("DockyardProcessActive");
                 int processSlot = persistent.getInt("DockyardProcessSlot");
@@ -164,17 +163,12 @@ public class DockyardUpgradeLogic {
         PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
         CompoundTag dockyard = data.getDockyardData();
         Map<Integer, CompoundTag> slots = new HashMap<>();
-        // Слоты от 0 до N (например, 0 и 1)
         for (int i = 0; i < 2; ++i) {
             String key = "ship" + i;
             if (dockyard.contains(key)) {
                 slots.put(i, dockyard.getCompound(key).copy());
             }
         }
-        // DEBUG: Выводим содержимое capability в лог
-        LOGGER.info("SYNC TO CLIENT: slot0={}", dockyard.contains("ship0") ? dockyard.getCompound("ship0") : "null");
-        LOGGER.info("SYNC TO CLIENT: slot1={}", dockyard.contains("ship1") ? dockyard.getCompound("ship1") : "null");
-
         NetworkHandler.CHANNEL.send(
                 PacketDistributor.PLAYER.with(() -> player),
                 new S2CSyncDockyardClientPacket(slots)
