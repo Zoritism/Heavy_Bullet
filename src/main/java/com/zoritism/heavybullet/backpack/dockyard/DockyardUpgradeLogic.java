@@ -2,8 +2,6 @@ package com.zoritism.heavybullet.backpack.dockyard;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -17,6 +15,10 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.UUID;
 
+/**
+ * Dockyard logic: always use only the StorageWrapper provided by the container!
+ * Never search for a backpack in inventory or hands if the container is open.
+ */
 public class DockyardUpgradeLogic {
 
     private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
@@ -26,39 +28,36 @@ public class DockyardUpgradeLogic {
     }
 
     /**
-     * Универсальный обработчик для любого слота и источника (рюкзак-предмет или блок).
-     * @param player игрок
-     * @param slotIndex номер слота (0 или 1)
-     * @param release true = выпуск, false = захват
+     * Handles ship store/release for a specific slot.
+     * Uses only the open container's UpgradeWrapper!
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
-        LOGGER.info("[handleDockyardShipClick] Called for player={}, slotIndex={}, release={}",
+        LOGGER.info("[handleDockyardShipClick] player={}, slotIndex={}, release={}",
                 player != null ? player.getName().getString() : "null", slotIndex, release);
 
+        // 1. Получаем UpgradeWrapper из открытого контейнера (это гарантированно правильный StorageWrapper!)
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
         ItemStack backpack = null;
 
-        // Получаем UpgradeWrapper из контейнера (это всегда правильный рюкзак или блок!)
         try {
-            if (player != null && player.containerMenu != null) {
-                if (player.containerMenu.getClass().getName()
-                        .equals("com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeContainer")) {
-                    Object container = player.containerMenu;
-                    java.lang.reflect.Method m = container.getClass().getMethod("getUpgradeWrapper");
-                    Object w = m.invoke(container);
-                    if (w instanceof DockyardUpgradeWrapper wupg) {
-                        wrapper = wupg;
-                        blockEntity = wrapper.getStorageBlockEntity();
-                        backpack = wrapper.getStorageItemStack();
-                    }
+            if (player != null && player.containerMenu != null
+                    && player.containerMenu.getClass().getName().equals("com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeContainer"))
+            {
+                Object container = player.containerMenu;
+                java.lang.reflect.Method m = container.getClass().getMethod("getUpgradeWrapper");
+                Object w = m.invoke(container);
+                if (w instanceof DockyardUpgradeWrapper wupg) {
+                    wrapper = wupg;
+                    blockEntity = wrapper.getStorageBlockEntity();
+                    backpack = wrapper.getStorageItemStack();
                 }
             }
         } catch (Exception e) {
             LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
         }
 
-        // Если нет UpgradeWrapper или и blockEntity, и backpack невалидны — ошибка
+        // 2. Если контейнер не SophisticatedBackpacks или апгрейд не найден — ошибка!
         if (wrapper == null || (blockEntity == null && (backpack == null || backpack.isEmpty()))) {
             LOGGER.warn("[handleDockyardShipClick] No DockyardUpgradeWrapper or no valid storage found for player={}", player != null ? player.getName().getString() : "null");
             if (player != null) {
@@ -67,8 +66,9 @@ public class DockyardUpgradeLogic {
             return;
         }
 
-        // ==== BLOCKENTITY LOGIC ====
+        // 3. Работаем только с тем NBT-источником, который предоставляет UpgradeWrapper!
         if (blockEntity != null) {
+            // BLOCKENTITY LOGIC
             if (release) {
                 LOGGER.info("[handleDockyardShipClick] Trying to release ship from block slot {}", slotIndex);
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBlockSlot(blockEntity, slotIndex);
@@ -90,7 +90,7 @@ public class DockyardUpgradeLogic {
 
             LOGGER.info("[handleDockyardShipClick] Trying to store ship in block slot {}", slotIndex);
             if (DockyardDataHelper.hasShipInBlockSlot(blockEntity, slotIndex)) {
-                LOGGER.warn("[handleDockyardShipClick] Block slot {} already has ship, cannot store another", slotIndex);
+                LOGGER.warn("[handleDockyardShipClick] Block slot {} already has ship", slotIndex);
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
@@ -120,8 +120,8 @@ public class DockyardUpgradeLogic {
             return;
         }
 
-        // ==== ITEMSTACK LOGIC ====
         if (backpack != null && !backpack.isEmpty()) {
+            // ITEMSTACK LOGIC
             if (release) {
                 LOGGER.info("[handleDockyardShipClick] Trying to release ship from backpack slot {}", slotIndex);
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpackSlot(backpack, slotIndex);
@@ -143,7 +143,7 @@ public class DockyardUpgradeLogic {
 
             LOGGER.info("[handleDockyardShipClick] Trying to store ship in backpack slot {}", slotIndex);
             if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slotIndex)) {
-                LOGGER.warn("[handleDockyardShipClick] Backpack slot {} already has ship, cannot store another", slotIndex);
+                LOGGER.warn("[handleDockyardShipClick] Backpack slot {} already has ship", slotIndex);
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
