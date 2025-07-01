@@ -134,6 +134,8 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     private void handleSlotButtonClick(int slot) {
         boolean hasShip = hasShipInSlot(slot);
+        // Если есть корабль — при клике вытаскиваем (release=true)
+        // Если нет — при клике засовываем (release=false)
         NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
 

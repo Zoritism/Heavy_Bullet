@@ -42,8 +42,10 @@ public class C2SHandleDockyardShipPacket {
                 LOGGER.warn("[C2SHandleDockyardShipPacket] Sender is null -- probably clientside or lost context!");
                 return;
             }
-            // Вызываем серверную механику для докового слота
             try {
+                // Новая логика: всегда слот нажимается как "toggle".
+                // Если в слоте есть корабль, кнопка должна ВЫТАСКИВАТЬ корабль (release = true)
+                // Если в слоте нет корабля, кнопка должна ЗАСОВЫВАТЬ корабль (release = false)
                 DockyardUpgradeLogic.handleDockyardShipClick(ctx.get().getSender(), pkt.slotIndex, pkt.action);
                 LOGGER.info("[C2SHandleDockyardShipPacket] handleDockyardShipClick executed successfully.");
             } catch (Exception e) {
