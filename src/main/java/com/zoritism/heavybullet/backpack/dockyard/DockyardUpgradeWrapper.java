@@ -98,6 +98,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         BlockEntity be = getStorageBlockEntity();
         if (be == null) {
+            // Это штатная ситуация для предмета.
             return;
         }
         CompoundTag tag = getPersistentData(be);

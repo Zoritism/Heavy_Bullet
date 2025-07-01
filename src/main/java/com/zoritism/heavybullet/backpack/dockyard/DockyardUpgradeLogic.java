@@ -11,14 +11,10 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.UUID;
 
 public class DockyardUpgradeLogic {
-
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
 
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
         handleDockyardShipClick(player, 0, release);
@@ -28,43 +24,32 @@ public class DockyardUpgradeLogic {
      * Операция только с открытым контейнером SophisticatedBackpacks!
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
-        LOGGER.info("[handleDockyardShipClick] Called for player={}, slotIndex={}, release={}",
-                player != null ? player.getName().getString() : "null", slotIndex, release);
-
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
         ItemStack backpack = null;
 
-        // Используем явное приведение типов для UpgradeContainerBase, чтобы избежать ошибки компиляции
+        // Получаем UpgradeWrapper из открытого DockyardUpgradeContainer (только из открытого GUI!)
         try {
             if (player != null && player.containerMenu != null) {
                 AbstractContainerMenu menu = player.containerMenu;
-                // Проверяем по имени класса, затем явно приводим к UpgradeContainerBase
-                if (menu.getClass().getName().equals("com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeContainer")
-                        || menu.getClass().getName().equals("net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerBase")) {
-                    // Попробуем привести к UpgradeContainerBase через reflection
-                    try {
-                        Object uc = menu;
-                        java.lang.reflect.Method m = uc.getClass().getMethod("getUpgradeWrapper");
-                        Object w = m.invoke(uc);
-                        if (w instanceof DockyardUpgradeWrapper wupg) {
-                            wrapper = wupg;
-                            blockEntity = wrapper.getStorageBlockEntity();
-                            backpack = wrapper.getStorageItemStack();
-                        }
-                    } catch (Exception e) {
-                        LOGGER.error("[handleDockyardShipClick] Reflection error: ", e);
+                try {
+                    java.lang.reflect.Method m = menu.getClass().getMethod("getUpgradeWrapper");
+                    Object w = m.invoke(menu);
+                    if (w instanceof DockyardUpgradeWrapper wupg) {
+                        wrapper = wupg;
+                        blockEntity = wrapper.getStorageBlockEntity();
+                        backpack = wrapper.getStorageItemStack();
                     }
+                } catch (Exception e) {
+                    // ignore
                 }
             }
         } catch (Exception e) {
-            LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
+            // ignore
         }
 
-        // Если UpgradeWrapper не найден — значит вкладка не открыта/апгрейд не вставлен.
+        // Если не удалось получить UpgradeWrapper — ошибка (никаких поисков рюкзака у игрока)!
         if (wrapper == null || (blockEntity == null && (backpack == null || backpack.isEmpty()))) {
-            LOGGER.warn("[handleDockyardShipClick] No DockyardUpgradeWrapper or no valid storage found for player={}",
-                    player != null ? player.getName().getString() : "null");
             if (player != null) {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
             }
@@ -74,11 +59,9 @@ public class DockyardUpgradeLogic {
         // ==== BLOCKENTITY LOGIC ====
         if (blockEntity != null) {
             if (release) {
-                LOGGER.info("[handleDockyardShipClick] Trying to release ship from block slot {}", slotIndex);
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBlockSlot(blockEntity, slotIndex);
                 if (shipNbt != null) {
                     boolean restored = spawnShipFromNbt(player, shipNbt);
-                    LOGGER.info("[handleDockyardShipClick] Spawn ship result: {}", restored);
                     if (restored) {
                         DockyardDataHelper.clearShipFromBlockSlot(blockEntity, slotIndex);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
@@ -86,28 +69,22 @@ public class DockyardUpgradeLogic {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.restore_failed"), true);
                     }
                 } else {
-                    LOGGER.info("[handleDockyardShipClick] No ship stored in block slot {}", slotIndex);
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_stored"), true);
                 }
                 return;
             }
 
-            LOGGER.info("[handleDockyardShipClick] Trying to store ship in block slot {}", slotIndex);
             if (DockyardDataHelper.hasShipInBlockSlot(blockEntity, slotIndex)) {
-                LOGGER.warn("[handleDockyardShipClick] Block slot {} already has ship, cannot store another", slotIndex);
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
             ServerShipHandle ship = findShipPlayerIsLookingAt(player, 4.0);
-            LOGGER.info("[handleDockyardShipClick] findShipPlayerIsLookingAt result: {}", ship != null ? "found" : "not found");
             if (ship != null) {
                 CompoundTag shipNbt = new CompoundTag();
                 boolean result = saveShipToNbt(ship, shipNbt, player);
-                LOGGER.info("[handleDockyardShipClick] saveShipToNbt result: {}", result);
                 if (result) {
                     DockyardDataHelper.saveShipToBlockSlot(blockEntity, shipNbt, slotIndex);
                     boolean removed = removeShipFromWorld(ship, player);
-                    LOGGER.info("[handleDockyardShipClick] removeShipFromWorld result: {}", removed);
                     if (removed) {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
                     } else {
@@ -118,7 +95,6 @@ public class DockyardUpgradeLogic {
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.save_failed"), true);
                 }
             } else {
-                LOGGER.info("[handleDockyardShipClick] No ship found in sight");
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_found"), true);
             }
             return;
@@ -127,11 +103,9 @@ public class DockyardUpgradeLogic {
         // ==== ITEMSTACK LOGIC ====
         if (backpack != null && !backpack.isEmpty()) {
             if (release) {
-                LOGGER.info("[handleDockyardShipClick] Trying to release ship from backpack slot {}", slotIndex);
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpackSlot(backpack, slotIndex);
                 if (shipNbt != null) {
                     boolean restored = spawnShipFromNbt(player, shipNbt);
-                    LOGGER.info("[handleDockyardShipClick] Spawn ship result: {}", restored);
                     if (restored) {
                         DockyardDataHelper.clearShipFromBackpackSlot(backpack, slotIndex);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
@@ -139,28 +113,22 @@ public class DockyardUpgradeLogic {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.restore_failed"), true);
                     }
                 } else {
-                    LOGGER.info("[handleDockyardShipClick] No ship stored in backpack slot {}", slotIndex);
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_stored"), true);
                 }
                 return;
             }
 
-            LOGGER.info("[handleDockyardShipClick] Trying to store ship in backpack slot {}", slotIndex);
             if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slotIndex)) {
-                LOGGER.warn("[handleDockyardShipClick] Backpack slot {} already has ship, cannot store another", slotIndex);
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
             ServerShipHandle ship = findShipPlayerIsLookingAt(player, 4.0);
-            LOGGER.info("[handleDockyardShipClick] findShipPlayerIsLookingAt result: {}", ship != null ? "found" : "not found");
             if (ship != null) {
                 CompoundTag shipNbt = new CompoundTag();
                 boolean result = saveShipToNbt(ship, shipNbt, player);
-                LOGGER.info("[handleDockyardShipClick] saveShipToNbt result: {}", result);
                 if (result) {
                     DockyardDataHelper.saveShipToBackpackSlot(backpack, shipNbt, slotIndex);
                     boolean removed = removeShipFromWorld(ship, player);
-                    LOGGER.info("[handleDockyardShipClick] removeShipFromWorld result: {}", removed);
                     if (removed) {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
                     } else {
@@ -171,14 +139,12 @@ public class DockyardUpgradeLogic {
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.save_failed"), true);
                 }
             } else {
-                LOGGER.info("[handleDockyardShipClick] No ship found in sight");
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_found"), true);
             }
             return;
         }
 
         // Этот случай невозможен если контейнер реально открыт SophisticatedBackpacks!
-        LOGGER.warn("[handleDockyardShipClick] No valid storage in wrapper for player={}", player != null ? player.getName().getString() : "null");
         if (player != null) {
             player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
         }
@@ -193,49 +159,35 @@ public class DockyardUpgradeLogic {
                 eye, target, net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, player
         ));
 
-        LOGGER.info("[findShipPlayerIsLookingAt] Player={}, eye={}, look={}, target={}, hit={}",
-                player.getName().getString(), eye, look, target, hit);
-
         if (hit == null || hit.getType() == HitResult.Type.MISS) {
-            LOGGER.info("[findShipPlayerIsLookingAt] No block/entity hit (MISS)");
             return null;
         }
         Vec3 pos = hit.getLocation();
         double dist = eye.distanceTo(pos);
 
-        LOGGER.info("[findShipPlayerIsLookingAt] Hit at {}, distance={}", pos, dist);
-
         if (dist > maxDistance + 0.01) {
-            LOGGER.info("[findShipPlayerIsLookingAt] Hit too far: {} > {}", dist, maxDistance);
             return null;
         }
 
         ServerLevel level = player.serverLevel();
 
         try {
-            ServerShipHandle found = VModSchematicJavaHelper.findServerShip(level, BlockPos.containing(pos.x, pos.y, pos.z));
-            LOGGER.info("[findShipPlayerIsLookingAt] Ship found by helper: {}", found != null);
-            return found;
+            return VModSchematicJavaHelper.findServerShip(level, BlockPos.containing(pos.x, pos.y, pos.z));
         } catch (Throwable t) {
-            LOGGER.error("[findShipPlayerIsLookingAt] Exception: ", t);
             return null;
         }
     }
 
     private static boolean saveShipToNbt(ServerShipHandle ship, CompoundTag nbt, ServerPlayer player) {
         if (ship == null) {
-            LOGGER.warn("[saveShipToNbt] Ship is null!");
             return false;
         }
         ServerLevel level = player.serverLevel();
         UUID uuid = UUID.randomUUID();
 
         try {
-            boolean result = VModSchematicJavaHelper.saveShipToNBT(level, player, uuid, ship, nbt);
-            LOGGER.info("[saveShipToNbt] VModSchematicJavaHelper.saveShipToNBT returned {}", result);
-            return result;
+            return VModSchematicJavaHelper.saveShipToNBT(level, player, uuid, ship, nbt);
         } catch (Throwable t) {
-            LOGGER.error("[saveShipToNbt] Exception: ", t);
             return false;
         }
     }
@@ -253,27 +205,21 @@ public class DockyardUpgradeLogic {
         Vec3 pos = player.position();
 
         try {
-            boolean result = VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, pos, nbt);
-            LOGGER.info("[spawnShipFromNbt] VModSchematicJavaHelper.spawnShipFromNBT returned {}", result);
-            return result;
+            return VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, pos, nbt);
         } catch (Throwable t) {
-            LOGGER.error("[spawnShipFromNbt] Exception: ", t);
             return false;
         }
     }
 
     private static boolean removeShipFromWorld(ServerShipHandle ship, ServerPlayer player) {
         if (ship == null) {
-            LOGGER.warn("[removeShipFromWorld] Ship is null!");
             return false;
         }
         ServerLevel level = player.serverLevel();
         try {
             VModSchematicJavaHelper.removeShip(level, ship);
-            LOGGER.info("[removeShipFromWorld] Ship removed successfully");
             return true;
         } catch (Throwable t) {
-            LOGGER.error("[removeShipFromWorld] Exception: ", t);
             return false;
         }
     }
@@ -294,18 +240,16 @@ public class DockyardUpgradeLogic {
             try {
                 ship = VModSchematicJavaHelper.findServerShip(level, pos);
             } catch (Throwable t) {
-                LOGGER.error("[findShipAboveBlock] Exception at pos {}: {}", pos, t);
+                // ignore
             }
             if (ship != null) {
-                LOGGER.info("[findShipAboveBlock] Found ship at {}", pos);
                 return ship;
             }
         }
-        LOGGER.info("[findShipAboveBlock] No ship found above block at {}", blockPos);
         return null;
     }
 
     public static void startBlockShipInsert(ServerLevel level, BlockPos blockPos, int slotIndex) {
-        LOGGER.info("[startBlockShipInsert] Ship insert process STARTED at {} for slot {}", blockPos, slotIndex);
+        // placeholder
     }
 }
