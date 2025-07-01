@@ -161,7 +161,7 @@ public class DockyardUpgradeLogic {
         }
     }
 
-    private static void syncDockyardToClient(ServerPlayer player) {
+    public static void syncDockyardToClient(ServerPlayer player) {
         PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
         CompoundTag dockyard = data.getDockyardData();
         Map<Integer, CompoundTag> slots = new HashMap<>();
