@@ -5,6 +5,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.HitResult;
@@ -34,24 +35,33 @@ public class DockyardUpgradeLogic {
         BlockEntity blockEntity = null;
         ItemStack backpack = null;
 
-        // 1. Получаем UpgradeWrapper из открытого DockyardUpgradeContainer (только из открытого GUI!)
+        // Используем явное приведение типов для UpgradeContainerBase, чтобы избежать ошибки компиляции
         try {
-            if (player != null && player.containerMenu != null
-                    && player.containerMenu.getClass().getSimpleName().equals("DockyardUpgradeContainer")) {
-                Object container = player.containerMenu;
-                java.lang.reflect.Method m = container.getClass().getMethod("getUpgradeWrapper");
-                Object w = m.invoke(container);
-                if (w instanceof DockyardUpgradeWrapper wupg) {
-                    wrapper = wupg;
-                    blockEntity = wrapper.getStorageBlockEntity();
-                    backpack = wrapper.getStorageItemStack();
+            if (player != null && player.containerMenu != null) {
+                AbstractContainerMenu menu = player.containerMenu;
+                // Проверяем по имени класса, затем явно приводим к UpgradeContainerBase
+                if (menu.getClass().getName().equals("com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeContainer")
+                        || menu.getClass().getName().equals("net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerBase")) {
+                    // Попробуем привести к UpgradeContainerBase через reflection
+                    try {
+                        Object uc = menu;
+                        java.lang.reflect.Method m = uc.getClass().getMethod("getUpgradeWrapper");
+                        Object w = m.invoke(uc);
+                        if (w instanceof DockyardUpgradeWrapper wupg) {
+                            wrapper = wupg;
+                            blockEntity = wrapper.getStorageBlockEntity();
+                            backpack = wrapper.getStorageItemStack();
+                        }
+                    } catch (Exception e) {
+                        LOGGER.error("[handleDockyardShipClick] Reflection error: ", e);
+                    }
                 }
             }
         } catch (Exception e) {
             LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
         }
 
-        // 2. Если не удалось получить UpgradeWrapper — ошибка (никаких поисков рюкзака у игрока)!
+        // Если UpgradeWrapper не найден — значит вкладка не открыта/апгрейд не вставлен.
         if (wrapper == null || (blockEntity == null && (backpack == null || backpack.isEmpty()))) {
             LOGGER.warn("[handleDockyardShipClick] No DockyardUpgradeWrapper or no valid storage found for player={}",
                     player != null ? player.getName().getString() : "null");
