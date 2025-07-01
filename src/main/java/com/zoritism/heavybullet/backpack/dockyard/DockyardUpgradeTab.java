@@ -5,7 +5,7 @@ import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.entity.player.Player;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.StorageScreenBase;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeSettingsTab;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.controls.ButtonDefinition;
@@ -84,16 +84,15 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     private static class WrapperOrBlockData {
         final BlockEntity be;
-        final ItemStack stack;
-        WrapperOrBlockData(BlockEntity be, ItemStack stack) {
+        final Player player;
+        WrapperOrBlockData(BlockEntity be, Player player) {
             this.be = be;
-            this.stack = stack;
+            this.player = player;
         }
     }
 
     /**
-     * Определяет источник хранения: или блок (BlockEntity), или предмет (ItemStack).
-     * Всегда использует storageWrapper из UpgradeWrapper!
+     * Определяет источник хранения: блок (BlockEntity) или capability игрока.
      */
     private WrapperOrBlockData getDataSource() {
         try {
@@ -103,9 +102,10 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                 if (be != null) {
                     return new WrapperOrBlockData(be, null);
                 }
-                ItemStack stack = wrapper.getStorageItemStack();
-                if (stack != null && !stack.isEmpty()) {
-                    return new WrapperOrBlockData(null, stack);
+                // Используем capability игрока, если предмет
+                Player player = Minecraft.getInstance().player;
+                if (player != null) {
+                    return new WrapperOrBlockData(null, player);
                 }
             }
         } catch (Exception e) {
@@ -119,8 +119,10 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         if (data == null) return false;
         if (data.be != null) {
             return DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
-        } else if (data.stack != null) {
-            return DockyardDataHelper.hasShipInBackpackSlot(data.stack, slot);
+        } else if (data.player != null) {
+            CompoundTag dockyardTag = PlayerDockyardDataUtil.getOrCreateClient(data.player).getDockyardData();
+            String key = "ship" + slot;
+            return dockyardTag.contains(key);
         }
         return false;
     }
@@ -132,9 +134,12 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         if (data.be != null) {
             CompoundTag ship = DockyardDataHelper.getShipFromBlockSlot(data.be, slot);
             if (ship != null) tag = ship;
-        } else if (data.stack != null) {
-            CompoundTag ship = DockyardDataHelper.getShipFromBackpackSlot(data.stack, slot);
-            if (ship != null) tag = ship;
+        } else if (data.player != null) {
+            CompoundTag dockyardTag = PlayerDockyardDataUtil.getOrCreateClient(data.player).getDockyardData();
+            String key = "ship" + slot;
+            if (dockyardTag.contains(key)) {
+                tag = dockyardTag.getCompound(key);
+            }
         }
         if (tag != null) {
             if (tag.contains("vs_ship_name")) {

@@ -14,6 +14,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
+/**
+ * Переписано для хранения информации о кораблях в capability игрока (PlayerDockyardData).
+ * Для блока рюкзака (BlockEntity) логика остаётся прежней.
+ */
 public class DockyardUpgradeLogic {
 
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
@@ -100,15 +104,21 @@ public class DockyardUpgradeLogic {
             return;
         }
 
-        // ==== ITEMSTACK LOGIC ====
-        if (backpack != null && !backpack.isEmpty()) {
+        // ==== PLAYER GLOBAL LOGIC ====
+        if (player != null) {
+            PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
+            CompoundTag dockyardData = data.getDockyardData();
+
+            String key = "ship" + slotIndex;
+
             if (release) {
-                CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpackSlot(backpack, slotIndex);
-                if (shipNbt != null) {
+                if (dockyardData.contains(key)) {
+                    CompoundTag shipNbt = dockyardData.getCompound(key);
                     boolean restored = spawnShipFromNbt(player, shipNbt);
                     if (restored) {
-                        DockyardDataHelper.clearShipFromBackpackSlot(backpack, slotIndex);
+                        dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
+                        data.setDirty();
                     } else {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.restore_failed"), true);
                     }
@@ -118,7 +128,7 @@ public class DockyardUpgradeLogic {
                 return;
             }
 
-            if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slotIndex)) {
+            if (dockyardData.contains(key)) {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
@@ -127,12 +137,13 @@ public class DockyardUpgradeLogic {
                 CompoundTag shipNbt = new CompoundTag();
                 boolean result = saveShipToNbt(ship, shipNbt, player);
                 if (result) {
-                    DockyardDataHelper.saveShipToBackpackSlot(backpack, shipNbt, slotIndex);
+                    dockyardData.put(key, shipNbt);
                     boolean removed = removeShipFromWorld(ship, player);
                     if (removed) {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
+                        data.setDirty();
                     } else {
-                        DockyardDataHelper.clearShipFromBackpackSlot(backpack, slotIndex);
+                        dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.remove_failed"), true);
                     }
                 } else {
