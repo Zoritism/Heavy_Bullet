@@ -37,9 +37,9 @@ public class DockyardUpgradeLogic {
 
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
-        ItemStack backpack = ItemStack.EMPTY;
+        ItemStack backpack = null;
 
-        // 1. Пробуем получить через GUI контейнер DockyardUpgradeContainer (если открыт)
+        // Получаем UpgradeWrapper из контейнера (это всегда правильный рюкзак или блок!)
         try {
             if (player != null && player.containerMenu != null) {
                 if (player.containerMenu.getClass().getName()
@@ -58,14 +58,17 @@ public class DockyardUpgradeLogic {
             LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
         }
 
-        // 2. Если не нашли через GUI — ищем рюкзак SophisticatedBackpacks с dockyard-апгрейдом в руках или инвентаре
-        if (wrapper == null && (backpack == null || backpack.isEmpty())) {
-            backpack = findBackpackWithDockyardUpgrade(player);
+        // Если нет UpgradeWrapper или и blockEntity, и backpack невалидны — ошибка
+        if (wrapper == null || (blockEntity == null && (backpack == null || backpack.isEmpty()))) {
+            LOGGER.warn("[handleDockyardShipClick] No DockyardUpgradeWrapper or no valid storage found for player={}", player != null ? player.getName().getString() : "null");
+            if (player != null) {
+                player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
+            }
+            return;
         }
 
         // ==== BLOCKENTITY LOGIC ====
         if (blockEntity != null) {
-            // === RELEASE logic ===
             if (release) {
                 LOGGER.info("[handleDockyardShipClick] Trying to release ship from block slot {}", slotIndex);
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBlockSlot(blockEntity, slotIndex);
@@ -85,7 +88,6 @@ public class DockyardUpgradeLogic {
                 return;
             }
 
-            // === STORE logic ===
             LOGGER.info("[handleDockyardShipClick] Trying to store ship in block slot {}", slotIndex);
             if (DockyardDataHelper.hasShipInBlockSlot(blockEntity, slotIndex)) {
                 LOGGER.warn("[handleDockyardShipClick] Block slot {} already has ship, cannot store another", slotIndex);
@@ -120,7 +122,6 @@ public class DockyardUpgradeLogic {
 
         // ==== ITEMSTACK LOGIC ====
         if (backpack != null && !backpack.isEmpty()) {
-            // === RELEASE logic ===
             if (release) {
                 LOGGER.info("[handleDockyardShipClick] Trying to release ship from backpack slot {}", slotIndex);
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpackSlot(backpack, slotIndex);
@@ -140,7 +141,6 @@ public class DockyardUpgradeLogic {
                 return;
             }
 
-            // === STORE logic ===
             LOGGER.info("[handleDockyardShipClick] Trying to store ship in backpack slot {}", slotIndex);
             if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slotIndex)) {
                 LOGGER.warn("[handleDockyardShipClick] Backpack slot {} already has ship, cannot store another", slotIndex);
@@ -173,56 +173,11 @@ public class DockyardUpgradeLogic {
             return;
         }
 
-        // Если ничего не найдено
-        LOGGER.warn("[handleDockyardShipClick] No backpack/block found for player={}", player != null ? player.getName().getString() : "null");
+        // Этот случай невозможен если контейнер реально открыт SophisticatedBackpacks!
+        LOGGER.warn("[handleDockyardShipClick] No valid storage in wrapper for player={}", player != null ? player.getName().getString() : "null");
         if (player != null) {
             player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
         }
-    }
-
-    /**
-     * Поиск SophisticatedBackpacks-рюкзака с dockyard-апгрейдом у игрока.
-     */
-    private static ItemStack findBackpackWithDockyardUpgrade(ServerPlayer player) {
-        if (player == null) return ItemStack.EMPTY;
-        // Проверяем обе руки
-        for (ItemStack stack : new ItemStack[]{player.getMainHandItem(), player.getOffhandItem()}) {
-            if (!stack.isEmpty() && isSophBackpackWithDockyard(stack)) {
-                return stack;
-            }
-        }
-        // Проверяем инвентарь
-        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-            ItemStack stack = player.getInventory().getItem(i);
-            if (!stack.isEmpty() && isSophBackpackWithDockyard(stack)) {
-                return stack;
-            }
-        }
-        return ItemStack.EMPTY;
-    }
-
-    /**
-     * Проверяет, что ItemStack - это рюкзак SophisticatedBackpacks с dockyard-апгрейдом.
-     * Проверка строго через ListTag "Upgrades" (формат SophisticatedBackpacks).
-     */
-    private static boolean isSophBackpackWithDockyard(ItemStack stack) {
-        if (stack == null || !stack.hasTag()) return false;
-        // Быстрая эвристика: item id должен содержать "backpack"
-        if (!stack.getItem().toString().toLowerCase().contains("backpack")) return false;
-        CompoundTag tag = stack.getTag();
-        if (tag.contains("Upgrades", Tag.TAG_LIST)) {
-            ListTag upgrades = tag.getList("Upgrades", Tag.TAG_COMPOUND);
-            for (int i = 0; i < upgrades.size(); i++) {
-                CompoundTag upgradeTag = upgrades.getCompound(i);
-                if (upgradeTag.contains("id", Tag.TAG_STRING)) {
-                    String upgId = upgradeTag.getString("id");
-                    if ("heavybullet:dockyard_upgrade".equals(upgId)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 
     @Nullable
