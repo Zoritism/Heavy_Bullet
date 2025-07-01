@@ -141,9 +141,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     protected void renderBg(GuiGraphics graphics, Minecraft minecraft, int mouseX, int mouseY) {
         super.renderBg(graphics, minecraft, mouseX, mouseY);
 
-        // DEBUG: Выводим содержимое клиентского кэша в лог
-        LOGGER.info("CACHE SLOT 0: '{}'", DockyardClientCache.getShipIdOrName(0));
-        LOGGER.info("CACHE SLOT 1: '{}'", DockyardClientCache.getShipIdOrName(1));
+
 
         if (!isOpen) {
             return;
