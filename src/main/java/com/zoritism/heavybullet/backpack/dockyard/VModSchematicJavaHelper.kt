@@ -65,10 +65,10 @@ object VModSchematicJavaHelper {
                 }
             }
             LOGGER.info("[findServerShip] No ship found at $pos")
-            null
+            return null
         } catch (e: Exception) {
             LOGGER.error("[findServerShip] Exception: ${e.message}", e)
-            null
+            return null
         }
     }
 
@@ -159,6 +159,18 @@ object VModSchematicJavaHelper {
             val id = serverShip.javaClass.getMethod("getId").invoke(serverShip) as Long
             nbt.putLong("vs_ship_id", id)
             LOGGER.info("[saveShipToNBT] Saved ship id $id to NBT")
+            // Добавим ship_name если есть (через reflection, если доступно)
+            try {
+                val getName = serverShip.javaClass.getMethod("getName")
+                val nameObj = getName.invoke(serverShip)
+                if (nameObj != null) {
+                    val nameStr = nameObj.toString()
+                    nbt.putString("vs_ship_name", nameStr)
+                    LOGGER.info("[saveShipToNBT] Saved ship name $nameStr to NBT")
+                }
+            } catch (_: Exception) {
+                // имя не найдено - не критично
+            }
             true
         } catch (e: Exception) {
             LOGGER.error("[saveShipToNBT] Exception: ${e.message}", e)
