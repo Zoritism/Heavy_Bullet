@@ -5,7 +5,6 @@ import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.entity.player.Player;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.StorageScreenBase;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeSettingsTab;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.controls.ButtonDefinition;
@@ -84,10 +83,8 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     private static class WrapperOrBlockData {
         final BlockEntity be;
-        final Player player;
-        WrapperOrBlockData(BlockEntity be, Player player) {
+        WrapperOrBlockData(BlockEntity be) {
             this.be = be;
-            this.player = player;
         }
     }
 
@@ -100,12 +97,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             if (wrapper != null) {
                 BlockEntity be = wrapper.getStorageBlockEntity();
                 if (be != null) {
-                    return new WrapperOrBlockData(be, null);
-                }
-                // Используем capability игрока, если предмет
-                Player player = Minecraft.getInstance().player;
-                if (player != null) {
-                    return new WrapperOrBlockData(null, player);
+                    return new WrapperOrBlockData(be);
                 }
             }
         } catch (Exception e) {
@@ -116,39 +108,28 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
 
     private boolean hasShipInSlot(int slot) {
         WrapperOrBlockData data = getDataSource();
-        if (data == null) return false;
-        if (data.be != null) {
+        if (data != null && data.be != null) {
             return DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
-        } else if (data.player != null) {
-            // Capability игрока на клиенте не синхронизируется по умолчанию. Возвращаем false.
-            // Для полноценного отображения потребуется реализовать sync.
-            return false;
+        } else {
+            // capability игрока — всегда используем клиентский кэш!
+            return DockyardClientCache.hasShipInSlot(slot);
         }
-        return false;
     }
 
     private String getStoredShipName(int slot) {
         WrapperOrBlockData data = getDataSource();
-        if (data == null) return "";
-        CompoundTag tag = null;
-        if (data.be != null) {
+        if (data != null && data.be != null) {
             CompoundTag ship = DockyardDataHelper.getShipFromBlockSlot(data.be, slot);
-            if (ship != null) tag = ship;
-        } else if (data.player != null) {
-            // Capability игрока на клиенте не синхронизируется по умолчанию. Возвращаем пустую строку.
-            // Для полноценного отображения потребуется реализовать sync.
+            if (ship != null) {
+                if (ship.contains("vs_ship_name")) return ship.getString("vs_ship_name");
+                if (ship.contains("vs_ship_id")) return "id:" + ship.getLong("vs_ship_id");
+                return "<ship>";
+            }
             return "";
+        } else {
+            // capability игрока — всегда используем клиентский кэш!
+            return DockyardClientCache.getShipIdOrName(slot);
         }
-        if (tag != null) {
-            if (tag.contains("vs_ship_name")) {
-                return tag.getString("vs_ship_name");
-            }
-            if (tag.contains("vs_ship_id")) {
-                return "id:" + tag.getLong("vs_ship_id");
-            }
-            return "<ship>";
-        }
-        return "";
     }
 
     private void handleSlotButtonClick(int slot) {
