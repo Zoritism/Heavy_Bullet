@@ -2,6 +2,8 @@ package com.zoritism.heavybullet.backpack.dockyard;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -33,9 +35,8 @@ public class DockyardUpgradeLogic {
                 player != null ? player.getName().getString() : "null", slotIndex, release);
 
         ItemStack backpack = ItemStack.EMPTY;
-        DockyardUpgradeWrapper wrapper = null;
 
-        // 1. Пробуем получить через GUI контейнер (DockyardUpgradeContainer)
+        // 1. Пробуем получить через GUI контейнер DockyardUpgradeContainer (если открыт)
         try {
             if (player != null && player.containerMenu != null) {
                 if (player.containerMenu.getClass().getName()
@@ -43,8 +44,7 @@ public class DockyardUpgradeLogic {
                     Object container = player.containerMenu;
                     java.lang.reflect.Method m = container.getClass().getMethod("getUpgradeWrapper");
                     Object w = m.invoke(container);
-                    if (w instanceof DockyardUpgradeWrapper) {
-                        wrapper = (DockyardUpgradeWrapper) w;
+                    if (w instanceof DockyardUpgradeWrapper wrapper) {
                         backpack = wrapper.getStorageItemStack();
                     }
                 }
@@ -53,24 +53,9 @@ public class DockyardUpgradeLogic {
             LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
         }
 
-        // 2. Если не нашли через GUI — ищем рюкзак с апгрейдом в руке или инвентаре
+        // 2. Если не нашли через GUI — ищем рюкзак SophisticatedBackpacks с dockyard-апгрейдом в руках или инвентаре
         if (backpack == null || backpack.isEmpty()) {
-            if (player != null) {
-                // main hand (если там рюкзак)
-                ItemStack hand = player.getMainHandItem();
-                if (hand != null && !hand.isEmpty() && stackHasDockyardUpgrade(hand)) {
-                    backpack = hand;
-                } else {
-                    // ищем рюкзак с апгрейдом в инвентаре
-                    for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-                        ItemStack stack = player.getInventory().getItem(i);
-                        if (stack != null && !stack.isEmpty() && stackHasDockyardUpgrade(stack)) {
-                            backpack = stack;
-                            break;
-                        }
-                    }
-                }
-            }
+            backpack = findBackpackWithDockyardUpgrade(player);
         }
 
         if (backpack == null || backpack.isEmpty()) {
@@ -134,16 +119,45 @@ public class DockyardUpgradeLogic {
     }
 
     /**
-     * Проверяет, есть ли апгрейд дока у рюкзака (itemstack).
-     * Можно заменить на более точную проверку для своего апгрейда, если нужно.
+     * Поиск SophisticatedBackpacks-рюкзака с dockyard-апгрейдом у игрока.
      */
-    private static boolean stackHasDockyardUpgrade(ItemStack stack) {
+    private static ItemStack findBackpackWithDockyardUpgrade(ServerPlayer player) {
+        if (player == null) return ItemStack.EMPTY;
+        // Проверяем обе руки
+        for (ItemStack stack : new ItemStack[]{player.getMainHandItem(), player.getOffhandItem()}) {
+            if (!stack.isEmpty() && isSophBackpackWithDockyard(stack)) {
+                return stack;
+            }
+        }
+        // Проверяем инвентарь
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (!stack.isEmpty() && isSophBackpackWithDockyard(stack)) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    /**
+     * Проверяет, что ItemStack - это рюкзак SophisticatedBackpacks с dockyard-апгрейдом.
+     * Проверка строго через ListTag "Upgrades" (формат SophisticatedBackpacks).
+     */
+    private static boolean isSophBackpackWithDockyard(ItemStack stack) {
         if (stack == null || !stack.hasTag()) return false;
+        // Быстрая эвристика: item id должен содержать "backpack"
+        if (!stack.getItem().toString().toLowerCase().contains("backpack")) return false;
         CompoundTag tag = stack.getTag();
-        if (tag.contains("Upgrades")) {
-            CompoundTag upgrades = tag.getCompound("Upgrades");
-            if (upgrades.contains("heavybullet:dockyard_upgrade")) {
-                return true;
+        if (tag.contains("Upgrades", Tag.TAG_LIST)) {
+            ListTag upgrades = tag.getList("Upgrades", Tag.TAG_COMPOUND);
+            for (int i = 0; i < upgrades.size(); i++) {
+                CompoundTag upgradeTag = upgrades.getCompound(i);
+                if (upgradeTag.contains("id", Tag.TAG_STRING)) {
+                    String upgId = upgradeTag.getString("id");
+                    if ("heavybullet:dockyard_upgrade".equals(upgId)) {
+                        return true;
+                    }
+                }
             }
         }
         return false;

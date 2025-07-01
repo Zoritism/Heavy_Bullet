@@ -85,8 +85,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return false;
     }
 
-    // --- Остальной код без изменений ---
-
     @Override
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
         LOGGER.info("[DockyardUpgradeWrapper] tick called. entity={}, level={}, blockPos={}", entity, level, blockPos);
@@ -95,7 +93,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         BlockEntity be = getStorageBlockEntity();
         if (be == null) {
-            // Не пиши WARN, это штатно если апгрейд стоит в предметном рюкзаке!
+            // Больше не пишем WARN, это штатная ситуация для предмета.
             return;
         }
         CompoundTag tag = getPersistentData(be);
