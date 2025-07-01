@@ -81,45 +81,36 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         ));
     }
 
-    private static class WrapperOrBlockData {
-        final BlockEntity be;
-        WrapperOrBlockData(BlockEntity be) {
-            this.be = be;
-        }
-    }
-
-    /**
-     * Определяет источник хранения: блок (BlockEntity) или capability игрока.
-     */
-    private WrapperOrBlockData getDataSource() {
+    // Проверяем, открыт ли блок или capability
+    private boolean isBlockEntityOpened() {
         try {
             DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
             if (wrapper != null) {
                 BlockEntity be = wrapper.getStorageBlockEntity();
-                if (be != null) {
-                    return new WrapperOrBlockData(be);
-                }
+                return be != null;
             }
         } catch (Exception e) {
             // ignore
         }
-        return null;
+        return false;
     }
 
     private boolean hasShipInSlot(int slot) {
-        WrapperOrBlockData data = getDataSource();
-        if (data != null && data.be != null) {
-            return DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
+        if (isBlockEntityOpened()) {
+            DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
+            BlockEntity be = wrapper.getStorageBlockEntity();
+            return DockyardDataHelper.hasShipInBlockSlot(be, slot);
         } else {
-            // capability игрока — всегда используем клиентский кэш!
+            // capability игрока — используем клиентский кэш!
             return DockyardClientCache.hasShipInSlot(slot);
         }
     }
 
     private String getStoredShipName(int slot) {
-        WrapperOrBlockData data = getDataSource();
-        if (data != null && data.be != null) {
-            CompoundTag ship = DockyardDataHelper.getShipFromBlockSlot(data.be, slot);
+        if (isBlockEntityOpened()) {
+            DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
+            BlockEntity be = wrapper.getStorageBlockEntity();
+            CompoundTag ship = DockyardDataHelper.getShipFromBlockSlot(be, slot);
             if (ship != null) {
                 if (ship.contains("vs_ship_name")) return ship.getString("vs_ship_name");
                 if (ship.contains("vs_ship_id")) return "id:" + ship.getLong("vs_ship_id");
@@ -127,15 +118,13 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             }
             return "";
         } else {
-            // capability игрока — всегда используем клиентский кэш!
+            // capability игрока — используем клиентский кэш!
             return DockyardClientCache.getShipIdOrName(slot);
         }
     }
 
     private void handleSlotButtonClick(int slot) {
         boolean hasShip = hasShipInSlot(slot);
-        // Если есть корабль — при клике вытаскиваем (release=true)
-        // Если нет — при клике засовываем (release=false)
         NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
 
