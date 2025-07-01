@@ -134,6 +134,19 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         }
     }
 
+    /**
+     * Запустить процесс засовывания корабля в блок-рюкзак.
+     * Вызывать из DockyardUpgradeLogic, если рюкзак-это блок, слот пустой и найден корабль.
+     */
+    public static void startInsertShipProcess(BlockEntity be, int slot, long shipId) {
+        CompoundTag tag = getPersistentDataStatic(be);
+        tag.putBoolean(NBT_PROCESS_ACTIVE, true);
+        tag.putInt(NBT_PROCESS_TICKS, 0);
+        tag.putLong(NBT_PROCESS_SHIP_ID, shipId);
+        tag.putInt(NBT_PROCESS_SLOT, slot);
+        be.setChanged();
+    }
+
     private void clearProcess(CompoundTag tag, BlockEntity be) {
         tag.putBoolean(NBT_PROCESS_ACTIVE, false);
         tag.putInt(NBT_PROCESS_TICKS, 0);
@@ -143,6 +156,19 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     private CompoundTag getPersistentData(BlockEntity blockEntity) {
+        try {
+            Method m = blockEntity.getClass().getMethod("getPersistentData");
+            Object result = m.invoke(blockEntity);
+            if (result instanceof CompoundTag tag) {
+                return tag;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return new CompoundTag();
+    }
+
+    private static CompoundTag getPersistentDataStatic(BlockEntity blockEntity) {
         try {
             Method m = blockEntity.getClass().getMethod("getPersistentData");
             Object result = m.invoke(blockEntity);
