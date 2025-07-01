@@ -6,7 +6,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -30,7 +29,6 @@ public class DockyardUpgradeLogic {
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
-        ItemStack backpack = null;
 
         // Получаем UpgradeWrapper из открытого DockyardUpgradeContainer (только из открытого GUI!)
         try {
@@ -42,7 +40,6 @@ public class DockyardUpgradeLogic {
                     if (w instanceof DockyardUpgradeWrapper wupg) {
                         wrapper = wupg;
                         blockEntity = wrapper.getStorageBlockEntity();
-                        backpack = wrapper.getStorageItemStack();
                     }
                 } catch (Exception e) {
                     // ignore
@@ -52,8 +49,8 @@ public class DockyardUpgradeLogic {
             // ignore
         }
 
-        // Если не удалось получить UpgradeWrapper — ошибка (никаких поисков рюкзака у игрока)!
-        if (wrapper == null || (blockEntity == null && (backpack == null || backpack.isEmpty()))) {
+        // Если не удалось получить UpgradeWrapper — ошибка
+        if (wrapper == null) {
             if (player != null) {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
             }
@@ -118,7 +115,6 @@ public class DockyardUpgradeLogic {
                     if (restored) {
                         dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
-                        // data.setDirty(); // удалить этот вызов
                     } else {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.restore_failed"), true);
                     }
@@ -141,7 +137,6 @@ public class DockyardUpgradeLogic {
                     boolean removed = removeShipFromWorld(ship, player);
                     if (removed) {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
-                        // data.setDirty(); // удалить этот вызов
                     } else {
                         dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.remove_failed"), true);
