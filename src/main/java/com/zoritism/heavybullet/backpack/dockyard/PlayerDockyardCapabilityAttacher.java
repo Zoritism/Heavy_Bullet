@@ -1,6 +1,5 @@
 package com.zoritism.heavybullet.backpack.dockyard;
 
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
@@ -13,7 +12,7 @@ public class PlayerDockyardCapabilityAttacher {
     public static void attach(AttachCapabilitiesEvent<Entity> event) {
         if (event.getObject() instanceof Player) {
             event.addCapability(
-                    new ResourceLocation("heavybullet", "dockyard"),
+                    PlayerDockyardDataProvider.CAP_ID,
                     new PlayerDockyardDataProvider()
             );
         }
