@@ -16,12 +16,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
 import java.util.function.Consumer;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
-
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeWrapper");
 
     private static final String NBT_PROCESS_ACTIVE = "DockyardProcessActive";
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
@@ -64,10 +60,10 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             } catch (NoSuchMethodException ignored) {
                 // Нет ни getStack, ни getStorage
             } catch (Exception ex) {
-                LOGGER.error("[DockyardUpgradeWrapper] getStorageItemStack (getStorage) exception: ", ex);
+                // ignore
             }
         } catch (Exception e) {
-            LOGGER.error("[DockyardUpgradeWrapper] getStorageItemStack (getStack) exception: ", e);
+            // ignore
         }
         return ItemStack.EMPTY;
     }
@@ -84,9 +80,9 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             Object be = m.invoke(storageWrapper);
             if (be instanceof BlockEntity blockEntity) return blockEntity;
         } catch (NoSuchMethodException nsme) {
-            LOGGER.debug("[DockyardUpgradeWrapper] getStorageBlockEntity: method getBlockEntity() not present on {}", storageWrapper.getClass().getName());
+            // ignore
         } catch (Exception e) {
-            LOGGER.error("[DockyardUpgradeWrapper] getStorageBlockEntity exception: ", e);
+            // ignore
         }
         return null;
     }
@@ -98,13 +94,10 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     @Override
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
-        LOGGER.info("[DockyardUpgradeWrapper] tick called. entity={}, level={}, blockPos={}", entity, level, blockPos);
-
         if (level.isClientSide || blockPos == null) return;
 
         BlockEntity be = getStorageBlockEntity();
         if (be == null) {
-            // Это штатная ситуация для предмета.
             return;
         }
         CompoundTag tag = getPersistentData(be);
@@ -122,10 +115,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             ServerLevel serverLevel = (ServerLevel) level;
             DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, blockPos, SHIP_RAY_DIST);
             boolean shipValid = ship != null && ship.getId() == shipId;
-            LOGGER.info("[DockyardUpgradeWrapper] tick: process active, ticks={}, shipId={}, slot={}, shipValid={}", ticks, shipId, slot, shipValid);
             if (!shipValid) {
                 clearProcess(tag, be);
-                LOGGER.info("[DockyardUpgradeWrapper] tick: process stopped, ship not valid.");
                 return;
             }
             spawnDockyardParticles(serverLevel, blockPos, ship);
@@ -136,7 +127,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 if (result) {
                     DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
                     DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
-                    LOGGER.info("[DockyardUpgradeWrapper] tick: ship saved to block slot {} and removed from world.", slot);
                 }
                 clearProcess(tag, be);
             }
@@ -144,7 +134,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     private void clearProcess(CompoundTag tag, BlockEntity be) {
-        LOGGER.info("[DockyardUpgradeWrapper] clearProcess for BlockEntity={}", be);
         tag.putBoolean(NBT_PROCESS_ACTIVE, false);
         tag.putInt(NBT_PROCESS_TICKS, 0);
         tag.putLong(NBT_PROCESS_SHIP_ID, 0L);
@@ -160,7 +149,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 return tag;
             }
         } catch (Exception e) {
-            LOGGER.error("[DockyardUpgradeWrapper] getPersistentData exception: ", e);
+            // ignore
         }
         return new CompoundTag();
     }
@@ -184,7 +173,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 }
             }
         } catch (Exception e) {
-            LOGGER.error("[DockyardUpgradeWrapper] syncBackpackShipsToBlock exception: ", e);
+            // ignore
         }
     }
 
@@ -197,7 +186,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 return stack;
             }
         } catch (Exception e) {
-            LOGGER.error("[DockyardUpgradeWrapper] getBackpackItemFromBlockEntity exception: ", e);
+            // ignore
         }
         return null;
     }
@@ -248,7 +237,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
             }
         } catch (Exception e) {
-            LOGGER.error("[DockyardUpgradeWrapper] tryGetShipAABB exception: ", e);
+            // ignore
         }
         return null;
     }
