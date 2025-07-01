@@ -23,5 +23,12 @@ public class NetworkHandler {
                 C2SHandleDockyardShipPacket::decode,
                 C2SHandleDockyardShipPacket::handle
         );
+        CHANNEL.registerMessage(
+                packetId++,
+                S2CSyncDockyardClientPacket.class,
+                S2CSyncDockyardClientPacket::encode,
+                S2CSyncDockyardClientPacket::decode,
+                S2CSyncDockyardClientPacket::handle
+        );
     }
 }

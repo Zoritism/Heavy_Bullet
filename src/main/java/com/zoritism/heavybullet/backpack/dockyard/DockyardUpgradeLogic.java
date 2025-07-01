@@ -1,5 +1,7 @@
 package com.zoritism.heavybullet.backpack.dockyard;
 
+import com.zoritism.heavybullet.network.S2CSyncDockyardClientPacket;
+import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -9,8 +11,11 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -108,6 +113,7 @@ public class DockyardUpgradeLogic {
                     if (restored) {
                         dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
+                        syncDockyardToClient(player);
                     } else {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.restore_failed"), true);
                     }
@@ -130,9 +136,11 @@ public class DockyardUpgradeLogic {
                     boolean removed = removeShipFromWorld(ship, player);
                     if (removed) {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
+                        syncDockyardToClient(player);
                     } else {
                         dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.remove_failed"), true);
+                        syncDockyardToClient(player);
                     }
                 } else {
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.save_failed"), true);
@@ -147,6 +155,23 @@ public class DockyardUpgradeLogic {
         if (player != null) {
             player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
         }
+    }
+
+    private static void syncDockyardToClient(ServerPlayer player) {
+        PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
+        CompoundTag dockyard = data.getDockyardData();
+        Map<Integer, CompoundTag> slots = new HashMap<>();
+        // Слоты от 0 до N (например, 0 и 1)
+        for (int i = 0; i < 2; ++i) {
+            String key = "ship" + i;
+            if (dockyard.contains(key)) {
+                slots.put(i, dockyard.getCompound(key).copy());
+            }
+        }
+        NetworkHandler.CHANNEL.send(
+                PacketDistributor.PLAYER.with(() -> player),
+                new S2CSyncDockyardClientPacket(slots)
+        );
     }
 
     @Nullable
