@@ -49,14 +49,6 @@ public class DockyardUpgradeLogic {
             // ignore
         }
 
-        // Если не удалось получить UpgradeWrapper — ошибка
-        if (wrapper == null) {
-            if (player != null) {
-                player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
-            }
-            return;
-        }
-
         // ==== BLOCKENTITY LOGIC ====
         if (blockEntity != null) {
             if (release) {
@@ -102,6 +94,7 @@ public class DockyardUpgradeLogic {
         }
 
         // ==== PLAYER GLOBAL LOGIC ====
+        // Если нет blockEntity, всегда работаем с capability игрока!
         if (player != null) {
             PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
             CompoundTag dockyardData = data.getDockyardData();
