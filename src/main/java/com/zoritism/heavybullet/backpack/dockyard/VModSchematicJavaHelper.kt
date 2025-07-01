@@ -73,22 +73,24 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Сохранить корабль в NBT (забрать в рюкзак)
+     * Сохранить корабль в capability игрока (глобально, а не в рюкзаке!)
      * @return true если успешно, иначе false
      */
     @JvmStatic
-    fun tryStoreShipToBackpack(
+    fun tryStoreShipToPlayerDockyard(
         level: ServerLevel,
         player: ServerPlayer,
-        backpack: net.minecraft.world.item.ItemStack,
         uuid: UUID,
         ship: DockyardUpgradeLogic.ServerShipHandle,
-        nbt: CompoundTag
+        nbt: CompoundTag,
+        slot: Int
     ): Boolean {
-        LOGGER.info("[tryStoreShipToBackpack] Called for player ${player.name.string}")
-        // Не даём забирать корабль если в рюкзаке уже есть другой
-        if (DockyardDataHelper.hasShipInBackpack(backpack)) {
-            LOGGER.info("[tryStoreShipToBackpack] Backpack already contains a ship")
+        LOGGER.info("[tryStoreShipToPlayerDockyard] Called for player ${player.name.string}, slot $slot")
+        // Не даём забирать корабль если у игрока уже есть в этом слоте
+        val dockyardData = PlayerDockyardDataUtil.getOrCreate(player).dockyardData
+        val key = "ship$slot"
+        if (dockyardData.contains(key)) {
+            LOGGER.info("[tryStoreShipToPlayerDockyard] Player already contains a ship in slot $slot")
             return false
         }
 
@@ -103,41 +105,39 @@ object VModSchematicJavaHelper {
             val maxY = aabb.javaClass.getMethod("maxY").invoke(aabb) as Double
             val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
             val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
-            // Реально ближайшее расстояние до бокса, а не центра
             val dx = maxOf(minX - playerPos.x, 0.0, playerPos.x - maxX)
             val dy = maxOf(minY - playerPos.y, 0.0, playerPos.y - maxY)
             val dz = maxOf(minZ - playerPos.z, 0.0, playerPos.z - maxZ)
             val dist = sqrt(dx * dx + dy * dy + dz * dz)
-            LOGGER.info("[tryStoreShipToBackpack] Distance to ship: $dist")
+            LOGGER.info("[tryStoreShipToPlayerDockyard] Distance to ship: $dist")
             if (dist > 4.0) {
-                LOGGER.warn("[tryStoreShipToBackpack] Ship is too far from player")
+                LOGGER.warn("[tryStoreShipToPlayerDockyard] Ship is too far from player")
                 return false
             }
         }
 
         // Сохраняем в NBT
         val saveResult = saveShipToNBT(level, player, uuid, ship, nbt)
-        LOGGER.info("[tryStoreShipToBackpack] Ship saved to NBT: $saveResult")
+        LOGGER.info("[tryStoreShipToPlayerDockyard] Ship saved to NBT: $saveResult")
         if (!saveResult) return false
 
-        // Только если успешно — сохраняем в рюкзак
-        DockyardDataHelper.saveShipToBackpack(backpack, nbt)
-        LOGGER.info("[tryStoreShipToBackpack] Ship saved to backpack NBT")
+        // Только если успешно — сохраняем в capability игрока
+        dockyardData.put(key, nbt)
+        LOGGER.info("[tryStoreShipToPlayerDockyard] Ship saved to player's dockyard capability in slot $slot")
 
-        // Удаляем из мира, если только что успешно сохранили в NBT и записали в рюкзак
+        // Удаляем из мира, если только что успешно сохранили в NBT и capability
         val removeResult = try {
             removeShip(level, ship)
-            LOGGER.info("[tryStoreShipToBackpack] Ship removed from world")
+            LOGGER.info("[tryStoreShipToPlayerDockyard] Ship removed from world")
             true
         } catch (e: Exception) {
-            LOGGER.error("[tryStoreShipToBackpack] Exception while removing ship: ${e.message}", e)
-            // Если не удалили — очищаем NBT в рюкзаке, чтобы не было дюпа
-            DockyardDataHelper.clearShipFromBackpack(backpack)
+            LOGGER.error("[tryStoreShipToPlayerDockyard] Exception while removing ship: ${e.message}", e)
+            dockyardData.remove(key)
             false
         }
         if (!removeResult) return false
 
-        LOGGER.info("[tryStoreShipToBackpack] Done, ship picked up successfully")
+        LOGGER.info("[tryStoreShipToPlayerDockyard] Done, ship picked up successfully")
         return true
     }
 
@@ -167,21 +167,23 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Спавн корабля из NBT (в мир из рюкзака)
+     * Спавн корабля из NBT (в мир из capability игрока)
      * @return true если успешно, иначе false
      */
     @JvmStatic
-    fun trySpawnShipFromBackpack(
+    fun trySpawnShipFromPlayerDockyard(
         level: ServerLevel,
         player: ServerPlayer,
-        backpack: net.minecraft.world.item.ItemStack,
         uuid: UUID,
-        nbt: CompoundTag
+        nbt: CompoundTag,
+        slot: Int
     ): Boolean {
-        LOGGER.info("[trySpawnShipFromBackpack] Called for player ${player.name.string}")
-        // Проверяем что в рюкзаке есть корабль
-        if (!DockyardDataHelper.hasShipInBackpack(backpack)) {
-            LOGGER.info("[trySpawnShipFromBackpack] No ship in backpack")
+        LOGGER.info("[trySpawnShipFromPlayerDockyard] Called for player ${player.name.string}, slot $slot")
+        // Проверяем что в capability есть корабль
+        val dockyardData = PlayerDockyardDataUtil.getOrCreate(player).dockyardData
+        val key = "ship$slot"
+        if (!dockyardData.contains(key)) {
+            LOGGER.info("[trySpawnShipFromPlayerDockyard] No ship in player dockyard in slot $slot")
             return false
         }
         // Проверяем что корабль ещё не существует в мире (не дюп)
@@ -199,7 +201,7 @@ object VModSchematicJavaHelper {
                     val getShipById = shipWorld.javaClass.getMethod("getShipById", java.lang.Long.TYPE)
                     val ship = getShipById.invoke(shipWorld, shipId)
                     if (ship != null) {
-                        LOGGER.warn("[trySpawnShipFromBackpack] Ship with id $shipId already exists in world")
+                        LOGGER.warn("[trySpawnShipFromPlayerDockyard] Ship with id $shipId already exists in world")
                         return false // Уже есть такой корабль
                     }
                 }
@@ -207,10 +209,10 @@ object VModSchematicJavaHelper {
         }
         // Спавним
         val success = spawnShipFromNBT(level, player, uuid, player.position(), nbt)
-        LOGGER.info("[trySpawnShipFromBackpack] Spawn result: $success")
+        LOGGER.info("[trySpawnShipFromPlayerDockyard] Spawn result: $success")
         if (success) {
-            DockyardDataHelper.clearShipFromBackpack(backpack)
-            LOGGER.info("[trySpawnShipFromBackpack] Cleared ship from backpack after spawn")
+            dockyardData.remove(key)
+            LOGGER.info("[trySpawnShipFromPlayerDockyard] Cleared ship from player's dockyard after spawn")
             return true
         }
         return false

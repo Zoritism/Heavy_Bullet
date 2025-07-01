@@ -120,9 +120,9 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         if (data.be != null) {
             return DockyardDataHelper.hasShipInBlockSlot(data.be, slot);
         } else if (data.player != null) {
-            CompoundTag dockyardTag = PlayerDockyardDataUtil.getOrCreateClient(data.player).getDockyardData();
-            String key = "ship" + slot;
-            return dockyardTag.contains(key);
+            // Capability игрока на клиенте не синхронизируется по умолчанию. Возвращаем false.
+            // Для полноценного отображения потребуется реализовать sync.
+            return false;
         }
         return false;
     }
@@ -135,11 +135,9 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             CompoundTag ship = DockyardDataHelper.getShipFromBlockSlot(data.be, slot);
             if (ship != null) tag = ship;
         } else if (data.player != null) {
-            CompoundTag dockyardTag = PlayerDockyardDataUtil.getOrCreateClient(data.player).getDockyardData();
-            String key = "ship" + slot;
-            if (dockyardTag.contains(key)) {
-                tag = dockyardTag.getCompound(key);
-            }
+            // Capability игрока на клиенте не синхронизируется по умолчанию. Возвращаем пустую строку.
+            // Для полноценного отображения потребуется реализовать sync.
+            return "";
         }
         if (tag != null) {
             if (tag.contains("vs_ship_name")) {

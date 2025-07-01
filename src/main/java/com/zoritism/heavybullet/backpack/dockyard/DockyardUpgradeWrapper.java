@@ -155,27 +155,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return new CompoundTag();
     }
 
+    /**
+     * После перехода к capability игрока для предмета, миграция слотов из ItemStack больше не нужна.
+     * Оставлен только для обратной совместимости — можно удалить весь метод, если не требуется миграция.
+     */
     private void syncBackpackShipsToBlock(BlockEntity be) {
-        try {
-            boolean hasShips = DockyardDataHelper.hasShipInBlockSlot(be, 0) ||
-                    DockyardDataHelper.hasShipInBlockSlot(be, 1);
-            if (hasShips) return;
-
-            ItemStack backpack = getBackpackItemFromBlockEntity(be);
-            if (backpack == null || !backpack.hasTag()) return;
-
-            for (int slot = 0; slot <= 1; slot++) {
-                if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slot)) {
-                    CompoundTag ship = DockyardDataHelper.getShipFromBackpackSlot(backpack, slot);
-                    if (ship != null) {
-                        DockyardDataHelper.saveShipToBlockSlot(be, ship, slot);
-                        DockyardDataHelper.clearShipFromBackpackSlot(backpack, slot);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // ignore
-        }
+        // Слоты из предмета больше не копируются в блок.
+        // Если требуется миграция старых данных из предмета — реализуйте здесь.
     }
 
     @Nullable

@@ -118,7 +118,7 @@ public class DockyardUpgradeLogic {
                     if (restored) {
                         dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
-                        data.setDirty();
+                        // data.setDirty(); // удалить этот вызов
                     } else {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.restore_failed"), true);
                     }
@@ -141,7 +141,7 @@ public class DockyardUpgradeLogic {
                     boolean removed = removeShipFromWorld(ship, player);
                     if (removed) {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
-                        data.setDirty();
+                        // data.setDirty(); // удалить этот вызов
                     } else {
                         dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.remove_failed"), true);
