@@ -58,11 +58,6 @@ public class DockyardUpgradeLogic {
             LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
         }
 
-        // 2. Если не нашли через GUI — ищем рюкзак SophisticatedBackpacks с dockyard-апгрейдом в руках или инвентаре
-        if (wrapper == null && (backpack == null || backpack.isEmpty())) {
-            backpack = findBackpackWithDockyardUpgrade(player);
-        }
-
         // ==== BLOCKENTITY LOGIC ====
         if (blockEntity != null) {
             // === RELEASE logic ===
