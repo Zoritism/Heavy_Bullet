@@ -15,10 +15,6 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.UUID;
 
-/**
- * Dockyard logic: always use only the StorageWrapper provided by the container!
- * Never search for a backpack in inventory or hands if the container is open.
- */
 public class DockyardUpgradeLogic {
 
     private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
@@ -28,36 +24,38 @@ public class DockyardUpgradeLogic {
     }
 
     /**
-     * Handles ship store/release for a specific slot.
-     * Uses only the open container's UpgradeWrapper!
+     * Универсальный обработчик для любого слота и источника (рюкзак-предмет или блок).
+     * @param player игрок
+     * @param slotIndex номер слота (0 или 1)
+     * @param release true = выпуск, false = захват
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
-        LOGGER.info("[handleDockyardShipClick] player={}, slotIndex={}, release={}",
-                player != null ? player.getName().getString() : "null", slotIndex, release);
+        LOGGER.info("[handleDockyardShipClick] Called for player={}, slotIndex={}, release={}", player != null ? player.getName().getString() : "null", slotIndex, release);
 
-        // 1. Получаем UpgradeWrapper из открытого контейнера (это гарантированно правильный StorageWrapper!)
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
         ItemStack backpack = null;
 
+        // 1. Получаем UpgradeWrapper из открытого контейнера SophisticatedBackpacks
         try {
-            if (player != null && player.containerMenu != null
-                    && player.containerMenu.getClass().getName().equals("com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeContainer"))
-            {
-                Object container = player.containerMenu;
-                java.lang.reflect.Method m = container.getClass().getMethod("getUpgradeWrapper");
-                Object w = m.invoke(container);
-                if (w instanceof DockyardUpgradeWrapper wupg) {
-                    wrapper = wupg;
-                    blockEntity = wrapper.getStorageBlockEntity();
-                    backpack = wrapper.getStorageItemStack();
+            if (player != null && player.containerMenu != null) {
+                // По классу определяем что это действительно контейнер вкладки (ВАЖНО!)
+                if (player.containerMenu.getClass().getSimpleName().equals("DockyardUpgradeContainer")) {
+                    Object container = player.containerMenu;
+                    java.lang.reflect.Method m = container.getClass().getMethod("getUpgradeWrapper");
+                    Object w = m.invoke(container);
+                    if (w instanceof DockyardUpgradeWrapper wupg) {
+                        wrapper = wupg;
+                        blockEntity = wrapper.getStorageBlockEntity();
+                        backpack = wrapper.getStorageItemStack();
+                    }
                 }
             }
         } catch (Exception e) {
             LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
         }
 
-        // 2. Если контейнер не SophisticatedBackpacks или апгрейд не найден — ошибка!
+        // 2. Если не удалось получить UpgradeWrapper — ошибка, fallback запрещён!
         if (wrapper == null || (blockEntity == null && (backpack == null || backpack.isEmpty()))) {
             LOGGER.warn("[handleDockyardShipClick] No DockyardUpgradeWrapper or no valid storage found for player={}", player != null ? player.getName().getString() : "null");
             if (player != null) {
@@ -66,7 +64,7 @@ public class DockyardUpgradeLogic {
             return;
         }
 
-        // 3. Работаем только с тем NBT-источником, который предоставляет UpgradeWrapper!
+        // 3. Работаем только с этим источником NBT!
         if (blockEntity != null) {
             // BLOCKENTITY LOGIC
             if (release) {
@@ -189,8 +187,7 @@ public class DockyardUpgradeLogic {
                 eye, target, net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, player
         ));
 
-        LOGGER.info("[findShipPlayerIsLookingAt] Player={}, eye={}, look={}, target={}, hit={}",
-                player.getName().getString(), eye, look, target, hit);
+        LOGGER.info("[findShipPlayerIsLookingAt] Player={}, eye={}, look={}, target={}, hit={}", player.getName().getString(), eye, look, target, hit);
 
         if (hit == null || hit.getType() == HitResult.Type.MISS) {
             LOGGER.info("[findShipPlayerIsLookingAt] No block/entity hit (MISS)");
