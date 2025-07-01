@@ -13,6 +13,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +25,8 @@ import java.util.UUID;
  * Для блока рюкзака (BlockEntity) логика остаётся прежней.
  */
 public class DockyardUpgradeLogic {
+
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
 
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
         handleDockyardShipClick(player, 0, release);
@@ -168,6 +172,10 @@ public class DockyardUpgradeLogic {
                 slots.put(i, dockyard.getCompound(key).copy());
             }
         }
+        // DEBUG: Выводим содержимое capability в лог
+        LOGGER.info("SYNC TO CLIENT: slot0={}", dockyard.contains("ship0") ? dockyard.getCompound("ship0") : "null");
+        LOGGER.info("SYNC TO CLIENT: slot1={}", dockyard.contains("ship1") ? dockyard.getCompound("ship1") : "null");
+
         NetworkHandler.CHANNEL.send(
                 PacketDistributor.PLAYER.with(() -> player),
                 new S2CSyncDockyardClientPacket(slots)

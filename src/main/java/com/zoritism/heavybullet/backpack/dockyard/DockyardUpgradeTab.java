@@ -16,10 +16,14 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.Position;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.TextureBlitData;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
 import net.minecraft.nbt.CompoundTag;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
+
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeTab");
 
     private static final int TAB_WIDTH = 103;
     private static final int TAB_HEIGHT = 92;
@@ -136,6 +140,10 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     @Override
     protected void renderBg(GuiGraphics graphics, Minecraft minecraft, int mouseX, int mouseY) {
         super.renderBg(graphics, minecraft, mouseX, mouseY);
+
+        // DEBUG: Выводим содержимое клиентского кэша в лог
+        LOGGER.info("CACHE SLOT 0: '{}'", DockyardClientCache.getShipIdOrName(0));
+        LOGGER.info("CACHE SLOT 1: '{}'", DockyardClientCache.getShipIdOrName(1));
 
         if (!isOpen) {
             return;
