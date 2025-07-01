@@ -80,22 +80,14 @@ public class DockyardUpgradeLogic {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
-            ServerShipHandle ship = findShipPlayerIsLookingAt(player, 4.0);
+            // Новый блок: запуск процесса засовывания корабля с задержкой!
+            ServerLevel serverLevel = player.serverLevel();
+            BlockPos pos = blockEntity.getBlockPos();
+            ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
             if (ship != null) {
-                CompoundTag shipNbt = new CompoundTag();
-                boolean result = saveShipToNbt(ship, shipNbt, player);
-                if (result) {
-                    DockyardDataHelper.saveShipToBlockSlot(blockEntity, shipNbt, slotIndex);
-                    boolean removed = removeShipFromWorld(ship, player);
-                    if (removed) {
-                        player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
-                    } else {
-                        DockyardDataHelper.clearShipFromBlockSlot(blockEntity, slotIndex);
-                        player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.remove_failed"), true);
-                    }
-                } else {
-                    player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.save_failed"), true);
-                }
+                // Проверяем, что процесс не запущен (можно добавить проверку в startInsertShipProcess, если нужно)
+                DockyardUpgradeWrapper.startInsertShipProcess(blockEntity, slotIndex, ship.getId());
+                player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.process_started"), true);
             } else {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_found"), true);
             }
