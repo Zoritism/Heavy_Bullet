@@ -50,16 +50,18 @@ public class DockyardUpgradeLogic {
             // ignore
         }
 
-        // Логируем: открыт ли как блок и координаты, если да
-        if (blockEntity != null) {
-            BlockPos bePos = blockEntity.getBlockPos();
-            System.out.println("[HeavyBullet] Dockyard opened as BLOCKENTITY at " + bePos);
-        } else {
-            System.out.println("[HeavyBullet] Dockyard opened as ITEM (capability)");
-        }
+        // Проверка: открыт как блок или как предмет?
+        boolean isOpenedAsBlock = blockEntity != null;
+        BlockPos blockPos = isOpenedAsBlock ? blockEntity.getBlockPos() : null;
+        // Для отладки/логирования можно использовать:
+        // if (isOpenedAsBlock) {
+        //     System.out.println("[HeavyBullet] Dockyard opened as BLOCKENTITY at " + blockPos);
+        // } else {
+        //     System.out.println("[HeavyBullet] Dockyard opened as ITEM (capability)");
+        // }
 
         // ==== BLOCKENTITY LOGIC ====
-        if (blockEntity != null) {
+        if (isOpenedAsBlock) {
             if (release) {
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBlockSlot(blockEntity, slotIndex);
                 if (shipNbt != null) {
@@ -82,7 +84,7 @@ public class DockyardUpgradeLogic {
             }
             // Для blockentity ищем корабль строго над блоком, не рейтрейсом от игрока!
             ServerLevel serverLevel = player.serverLevel();
-            BlockPos pos = blockEntity.getBlockPos();
+            BlockPos pos = blockPos;
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
             if (ship != null) {
                 CompoundTag persistent = getOrCreatePersistentData(blockEntity);
