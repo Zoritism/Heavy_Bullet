@@ -80,7 +80,7 @@ public class DockyardUpgradeLogic {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
-            // Новый блок: запуск процесса засовывания корабля с задержкой!
+            // Запускаем процесс "засовывания" с задержкой (10 сек), а не сохраняем корабль мгновенно!
             ServerLevel serverLevel = player.serverLevel();
             BlockPos pos = blockEntity.getBlockPos();
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
