@@ -38,39 +38,50 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return this.storageWrapper;
     }
 
+    /**
+     * Возвращает ItemStack рюкзака, если открыт как предмет.
+     * Если открыт блок, вернёт ItemStack.EMPTY.
+     * Использует getStack() или getStorage() через reflection для поддержки разных версий SophisticatedCore.
+     */
     @Nullable
     public ItemStack getStorageItemStack() {
-        // Попробовать получить именно рюкзак (ItemStack), а не апгрейд!
+        if (storageWrapper == null) return ItemStack.EMPTY;
         try {
-            // SophisticatedBackpacks: BackpackWrapper.getStorage() или getStack()
-            Method m;
-            Object stack = null;
-            try {
-                m = storageWrapper.getClass().getMethod("getStack");
-                stack = m.invoke(storageWrapper);
-            } catch (NoSuchMethodException e) {
-                try {
-                    m = storageWrapper.getClass().getMethod("getStorage");
-                    stack = m.invoke(storageWrapper);
-                } catch (NoSuchMethodException ignore) {}
-            }
+            // Пробуем getStack()
+            Method m = storageWrapper.getClass().getMethod("getStack");
+            Object stack = m.invoke(storageWrapper);
             if (stack instanceof ItemStack s && !s.isEmpty()) {
-                LOGGER.info("[DockyardUpgradeWrapper] getStorageItemStack: returning storageWrapper stack = {}, NBT={}", s, s.hasTag() ? s.getTag() : "no NBT");
                 return s;
             }
+        } catch (NoSuchMethodException e) {
+            // Если нет getStack, пробуем getStorage
+            try {
+                Method m2 = storageWrapper.getClass().getMethod("getStorage");
+                Object stack = m2.invoke(storageWrapper);
+                if (stack instanceof ItemStack s && !s.isEmpty()) {
+                    return s;
+                }
+            } catch (NoSuchMethodException ignored) {
+                // Нет ни getStack, ни getStorage
+            } catch (Exception ex) {
+                LOGGER.error("[DockyardUpgradeWrapper] getStorageItemStack (getStorage) exception: ", ex);
+            }
         } catch (Exception e) {
-            LOGGER.error("[DockyardUpgradeWrapper] getStorageItemStack exception: ", e);
+            LOGGER.error("[DockyardUpgradeWrapper] getStorageItemStack (getStack) exception: ", e);
         }
-        // Не пиши WARN, если это предмет — это штатно!
         return ItemStack.EMPTY;
     }
 
+    /**
+     * Возвращает BlockEntity рюкзака, если открыт как блок.
+     * Если открыт предмет, вернёт null.
+     */
     @Nullable
     public BlockEntity getStorageBlockEntity() {
+        if (storageWrapper == null) return null;
         try {
             Method m = storageWrapper.getClass().getMethod("getBlockEntity");
             Object be = m.invoke(storageWrapper);
-            LOGGER.info("[DockyardUpgradeWrapper] getStorageBlockEntity: storageWrapper={}, blockEntity={}", storageWrapper, be);
             if (be instanceof BlockEntity blockEntity) return blockEntity;
         } catch (NoSuchMethodException nsme) {
             LOGGER.debug("[DockyardUpgradeWrapper] getStorageBlockEntity: method getBlockEntity() not present on {}", storageWrapper.getClass().getName());
@@ -93,7 +104,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         BlockEntity be = getStorageBlockEntity();
         if (be == null) {
-            // Больше не пишем WARN, это штатная ситуация для предмета.
+            // Это штатная ситуация для предмета.
             return;
         }
         CompoundTag tag = getPersistentData(be);
@@ -145,7 +156,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         try {
             Method m = blockEntity.getClass().getMethod("getPersistentData");
             Object result = m.invoke(blockEntity);
-            LOGGER.info("[DockyardUpgradeWrapper] getPersistentData: blockEntity={}, persistentData={}", blockEntity, result);
             if (result instanceof CompoundTag tag) {
                 return tag;
             }
@@ -159,18 +169,14 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         try {
             boolean hasShips = DockyardDataHelper.hasShipInBlockSlot(be, 0) ||
                     DockyardDataHelper.hasShipInBlockSlot(be, 1);
-            LOGGER.info("[DockyardUpgradeWrapper] syncBackpackShipsToBlock: hasShipsInBlock0={}, hasShipsInBlock1={}",
-                    DockyardDataHelper.hasShipInBlockSlot(be, 0), DockyardDataHelper.hasShipInBlockSlot(be, 1));
             if (hasShips) return;
 
             ItemStack backpack = getBackpackItemFromBlockEntity(be);
-            LOGGER.info("[DockyardUpgradeWrapper] syncBackpackShipsToBlock: backpack={}, NBT={}", backpack, (backpack != null && backpack.hasTag()) ? backpack.getTag() : "no NBT");
             if (backpack == null || !backpack.hasTag()) return;
 
             for (int slot = 0; slot <= 1; slot++) {
                 if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slot)) {
                     CompoundTag ship = DockyardDataHelper.getShipFromBackpackSlot(backpack, slot);
-                    LOGGER.info("[DockyardUpgradeWrapper] syncBackpackShipsToBlock: moving ship from backpack slot {} to block", slot);
                     if (ship != null) {
                         DockyardDataHelper.saveShipToBlockSlot(be, ship, slot);
                         DockyardDataHelper.clearShipFromBackpackSlot(backpack, slot);
@@ -187,7 +193,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         try {
             var method = be.getClass().getMethod("getItem", int.class);
             Object result = method.invoke(be, 0);
-            LOGGER.info("[DockyardUpgradeWrapper] getBackpackItemFromBlockEntity: blockEntity={}, result={}, NBT={}", be, result, (result instanceof ItemStack s && s.hasTag()) ? s.getTag() : "no NBT");
             if (result instanceof ItemStack stack) {
                 return stack;
             }
@@ -240,7 +245,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
                 double maxY = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
                 double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
-                LOGGER.info("[DockyardUpgradeWrapper] tryGetShipAABB: AABB=({}, {}, {}, {}, {}, {})", minX, minY, minZ, maxX, maxY, maxZ);
                 return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
             }
         } catch (Exception e) {

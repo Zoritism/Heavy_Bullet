@@ -95,16 +95,19 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         }
     }
 
+    /**
+     * Определяет источник хранения: или блок (BlockEntity), или предмет (ItemStack).
+     * Всегда использует storageWrapper из UpgradeWrapper!
+     */
     private WrapperOrBlockData getDataSource() {
         try {
             DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
             if (wrapper != null) {
                 BlockEntity be = wrapper.getStorageBlockEntity();
-                ItemStack stack = wrapper.getStorageItemStack();
-
                 if (be != null) {
                     return new WrapperOrBlockData(be, null);
                 }
+                ItemStack stack = wrapper.getStorageItemStack();
                 if (stack != null && !stack.isEmpty()) {
                     return new WrapperOrBlockData(null, stack);
                 }
