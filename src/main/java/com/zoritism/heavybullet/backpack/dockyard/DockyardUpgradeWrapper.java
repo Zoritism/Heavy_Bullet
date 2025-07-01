@@ -34,23 +34,16 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return this.storageWrapper;
     }
 
-    /**
-     * Возвращает ItemStack рюкзака, если открыт как предмет.
-     * Если открыт блок, вернёт ItemStack.EMPTY.
-     * Использует getStack() или getStorage() через reflection для поддержки разных версий SophisticatedCore.
-     */
     @Nullable
     public ItemStack getStorageItemStack() {
         if (storageWrapper == null) return ItemStack.EMPTY;
         try {
-            // Пробуем getStack()
             Method m = storageWrapper.getClass().getMethod("getStack");
             Object stack = m.invoke(storageWrapper);
             if (stack instanceof ItemStack s && !s.isEmpty()) {
                 return s;
             }
         } catch (NoSuchMethodException e) {
-            // Если нет getStack, пробуем getStorage
             try {
                 Method m2 = storageWrapper.getClass().getMethod("getStorage");
                 Object stack = m2.invoke(storageWrapper);
@@ -58,20 +51,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                     return s;
                 }
             } catch (NoSuchMethodException ignored) {
-                // Нет ни getStack, ни getStorage
             } catch (Exception ex) {
-                // ignore
             }
         } catch (Exception e) {
-            // ignore
         }
         return ItemStack.EMPTY;
     }
 
-    /**
-     * Возвращает BlockEntity рюкзака, если открыт как блок.
-     * Если открыт предмет, вернёт null.
-     */
     @Nullable
     public BlockEntity getStorageBlockEntity() {
         if (storageWrapper == null) return null;
@@ -80,9 +66,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             Object be = m.invoke(storageWrapper);
             if (be instanceof BlockEntity blockEntity) return blockEntity;
         } catch (NoSuchMethodException nsme) {
-            // ignore
         } catch (Exception e) {
-            // ignore
         }
         return null;
     }
@@ -98,7 +82,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         BlockEntity be = getStorageBlockEntity();
         if (be == null) {
-            // Это штатная ситуация для предмета.
             return;
         }
         CompoundTag tag = getPersistentData(be);
@@ -163,7 +146,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 return tag;
             }
         } catch (Exception e) {
-            // ignore
         }
         return new CompoundTag();
     }
@@ -176,18 +158,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 return tag;
             }
         } catch (Exception e) {
-            // ignore
         }
         return new CompoundTag();
     }
 
-    /**
-     * После перехода к capability игрока для предмета, миграция слотов из ItemStack больше не нужна.
-     * Оставлен только для обратной совместимости — можно удалить весь метод, если не требуется миграция.
-     */
     private void syncBackpackShipsToBlock(BlockEntity be) {
-        // Слоты из предмета больше не копируются в блок.
-        // Если требуется миграция старых данных из предмета — реализуйте здесь.
+        // Заглушка для миграции, если потребуется
     }
 
     @Nullable
@@ -199,7 +175,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 return stack;
             }
         } catch (Exception e) {
-            // ignore
         }
         return null;
     }
@@ -250,7 +225,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
             }
         } catch (Exception e) {
-            // ignore
         }
         return null;
     }
