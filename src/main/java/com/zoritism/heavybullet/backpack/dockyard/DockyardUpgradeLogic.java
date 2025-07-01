@@ -24,49 +24,45 @@ public class DockyardUpgradeLogic {
     }
 
     /**
-     * Универсальный обработчик для любого слота и источника (рюкзак-предмет или блок).
-     * @param player игрок
-     * @param slotIndex номер слота (0 или 1)
-     * @param release true = выпуск, false = захват
+     * Операция только с открытым контейнером SophisticatedBackpacks!
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
-        LOGGER.info("[handleDockyardShipClick] Called for player={}, slotIndex={}, release={}", player != null ? player.getName().getString() : "null", slotIndex, release);
+        LOGGER.info("[handleDockyardShipClick] Called for player={}, slotIndex={}, release={}",
+                player != null ? player.getName().getString() : "null", slotIndex, release);
 
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
         ItemStack backpack = null;
 
-        // 1. Получаем UpgradeWrapper из открытого контейнера SophisticatedBackpacks
+        // 1. Получаем UpgradeWrapper из открытого DockyardUpgradeContainer (только из открытого GUI!)
         try {
-            if (player != null && player.containerMenu != null) {
-                // По классу определяем что это действительно контейнер вкладки (ВАЖНО!)
-                if (player.containerMenu.getClass().getSimpleName().equals("DockyardUpgradeContainer")) {
-                    Object container = player.containerMenu;
-                    java.lang.reflect.Method m = container.getClass().getMethod("getUpgradeWrapper");
-                    Object w = m.invoke(container);
-                    if (w instanceof DockyardUpgradeWrapper wupg) {
-                        wrapper = wupg;
-                        blockEntity = wrapper.getStorageBlockEntity();
-                        backpack = wrapper.getStorageItemStack();
-                    }
+            if (player != null && player.containerMenu != null
+                    && player.containerMenu.getClass().getSimpleName().equals("DockyardUpgradeContainer")) {
+                Object container = player.containerMenu;
+                java.lang.reflect.Method m = container.getClass().getMethod("getUpgradeWrapper");
+                Object w = m.invoke(container);
+                if (w instanceof DockyardUpgradeWrapper wupg) {
+                    wrapper = wupg;
+                    blockEntity = wrapper.getStorageBlockEntity();
+                    backpack = wrapper.getStorageItemStack();
                 }
             }
         } catch (Exception e) {
             LOGGER.error("[handleDockyardShipClick] Exception while accessing DockyardUpgradeWrapper: ", e);
         }
 
-        // 2. Если не удалось получить UpgradeWrapper — ошибка, fallback запрещён!
+        // 2. Если не удалось получить UpgradeWrapper — ошибка (никаких поисков рюкзака у игрока)!
         if (wrapper == null || (blockEntity == null && (backpack == null || backpack.isEmpty()))) {
-            LOGGER.warn("[handleDockyardShipClick] No DockyardUpgradeWrapper or no valid storage found for player={}", player != null ? player.getName().getString() : "null");
+            LOGGER.warn("[handleDockyardShipClick] No DockyardUpgradeWrapper or no valid storage found for player={}",
+                    player != null ? player.getName().getString() : "null");
             if (player != null) {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
             }
             return;
         }
 
-        // 3. Работаем только с этим источником NBT!
+        // ==== BLOCKENTITY LOGIC ====
         if (blockEntity != null) {
-            // BLOCKENTITY LOGIC
             if (release) {
                 LOGGER.info("[handleDockyardShipClick] Trying to release ship from block slot {}", slotIndex);
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBlockSlot(blockEntity, slotIndex);
@@ -88,7 +84,7 @@ public class DockyardUpgradeLogic {
 
             LOGGER.info("[handleDockyardShipClick] Trying to store ship in block slot {}", slotIndex);
             if (DockyardDataHelper.hasShipInBlockSlot(blockEntity, slotIndex)) {
-                LOGGER.warn("[handleDockyardShipClick] Block slot {} already has ship", slotIndex);
+                LOGGER.warn("[handleDockyardShipClick] Block slot {} already has ship, cannot store another", slotIndex);
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
@@ -118,8 +114,8 @@ public class DockyardUpgradeLogic {
             return;
         }
 
+        // ==== ITEMSTACK LOGIC ====
         if (backpack != null && !backpack.isEmpty()) {
-            // ITEMSTACK LOGIC
             if (release) {
                 LOGGER.info("[handleDockyardShipClick] Trying to release ship from backpack slot {}", slotIndex);
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBackpackSlot(backpack, slotIndex);
@@ -141,7 +137,7 @@ public class DockyardUpgradeLogic {
 
             LOGGER.info("[handleDockyardShipClick] Trying to store ship in backpack slot {}", slotIndex);
             if (DockyardDataHelper.hasShipInBackpackSlot(backpack, slotIndex)) {
-                LOGGER.warn("[handleDockyardShipClick] Backpack slot {} already has ship", slotIndex);
+                LOGGER.warn("[handleDockyardShipClick] Backpack slot {} already has ship, cannot store another", slotIndex);
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
@@ -187,7 +183,8 @@ public class DockyardUpgradeLogic {
                 eye, target, net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, player
         ));
 
-        LOGGER.info("[findShipPlayerIsLookingAt] Player={}, eye={}, look={}, target={}, hit={}", player.getName().getString(), eye, look, target, hit);
+        LOGGER.info("[findShipPlayerIsLookingAt] Player={}, eye={}, look={}, target={}, hit={}",
+                player.getName().getString(), eye, look, target, hit);
 
         if (hit == null || hit.getType() == HitResult.Type.MISS) {
             LOGGER.info("[findShipPlayerIsLookingAt] No block/entity hit (MISS)");
