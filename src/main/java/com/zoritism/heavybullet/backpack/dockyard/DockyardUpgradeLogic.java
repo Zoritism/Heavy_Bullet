@@ -80,12 +80,19 @@ public class DockyardUpgradeLogic {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
-            // Запускаем процесс "засовывания" с задержкой (10 сек), а не сохраняем корабль мгновенно!
+            // ОШИБКА БЫЛА ЗДЕСЬ: раньше корабль забирался мгновенно, теперь запускаем только процесс!
             ServerLevel serverLevel = player.serverLevel();
             BlockPos pos = blockEntity.getBlockPos();
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
             if (ship != null) {
-                // Проверяем, что процесс не запущен (можно добавить проверку в startInsertShipProcess, если нужно)
+                // Проверяем, не запущен ли уже процесс для этого блока и слота
+                CompoundTag persistent = getOrCreatePersistentData(blockEntity);
+                boolean isActive = persistent.getBoolean("DockyardProcessActive");
+                int processSlot = persistent.getInt("DockyardProcessSlot");
+                if (isActive && processSlot == slotIndex) {
+                    player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.process_already_running"), true);
+                    return;
+                }
                 DockyardUpgradeWrapper.startInsertShipProcess(blockEntity, slotIndex, ship.getId());
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.process_started"), true);
             } else {
@@ -271,6 +278,19 @@ public class DockyardUpgradeLogic {
             }
         }
         return null;
+    }
+
+    // Получить или создать ForgeData/PersistentData для блока
+    private static CompoundTag getOrCreatePersistentData(BlockEntity blockEntity) {
+        CompoundTag beTag = blockEntity.saveWithFullMetadata();
+        CompoundTag persistentData;
+        if (beTag.contains("ForgeData", 10)) {
+            persistentData = beTag.getCompound("ForgeData");
+        } else {
+            persistentData = new CompoundTag();
+            beTag.put("ForgeData", persistentData);
+        }
+        return persistentData;
     }
 
     public static void startBlockShipInsert(ServerLevel level, BlockPos blockPos, int slotIndex) {
