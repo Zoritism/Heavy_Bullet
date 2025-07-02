@@ -68,7 +68,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
     /**
      * Логировать все блок-рюкзаки с DockyardUpgrade в радиусе 10 блоков вокруг игрока (координаты + WrapperID).
-     * Для SophisticatedBackpacks >=3.x используется getComponent("upgrades") для получения апгрейдов.
+     * Для SophisticatedBackpacks (Forge, 3.x+) используется getUpgradeHandler().getUpgrades().
      */
     private void logNearbyBackpackBlocksWithDockyardUpgrade(Player player) {
         Level level = player.level();
@@ -89,19 +89,35 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
             if (!beClass.contains("sophisticatedbackpacks")) continue;
 
             List<?> upgrades = null;
-            // SophisticatedBackpacks >=3.x: getComponent("upgrades")
+            // SophisticatedBackpacks (Forge, 3.x+): getUpgradeHandler().getUpgrades()
             try {
-                Method getComponent = be.getClass().getMethod("getComponent", String.class);
-                Object upgradesComponent = getComponent.invoke(be, "upgrades");
-                if (upgradesComponent != null) {
-                    Method getUpgrades = upgradesComponent.getClass().getMethod("getUpgrades");
-                    Object upgradesObj = getUpgrades.invoke(upgradesComponent);
+                // Пробуем метод getUpgradeHandler()
+                Method getUpgradeHandler = be.getClass().getMethod("getUpgradeHandler");
+                Object upgradeHandler = getUpgradeHandler.invoke(be);
+                if (upgradeHandler != null) {
+                    Method getUpgrades = upgradeHandler.getClass().getMethod("getUpgrades");
+                    Object upgradesObj = getUpgrades.invoke(upgradeHandler);
                     if (upgradesObj instanceof List<?>) {
                         upgrades = (List<?>) upgradesObj;
                     }
                 }
+            } catch (NoSuchMethodException e) {
+                // Fallback: пробуем публичное поле upgradeHandler (редко, если нет метода)
+                try {
+                    Field upgradeHandlerField = be.getClass().getField("upgradeHandler");
+                    Object upgradeHandler = upgradeHandlerField.get(be);
+                    if (upgradeHandler != null) {
+                        Method getUpgrades = upgradeHandler.getClass().getMethod("getUpgrades");
+                        Object upgradesObj = getUpgrades.invoke(upgradeHandler);
+                        if (upgradesObj instanceof List<?>) {
+                            upgrades = (List<?>) upgradesObj;
+                        }
+                    }
+                } catch (Exception e2) {
+                    LOGGER.warn("[DockyardUpgradeContainer] BE at {}: Не найден апгрейд-обработчик: {}, {}", pos, e, e2);
+                }
             } catch (Exception e) {
-                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: не удалось получить апгрейды через getComponent(\"upgrades\")/getUpgrades: {}", pos, e.toString());
+                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: Ошибка при получении апгрейдов: {}", pos, e);
             }
 
             if (upgrades != null) {
@@ -138,7 +154,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
     /**
      * Сканирует все чанки и выводит координаты всех блок-рюкзаков с DockyardUpgrade, а также их WrapperID
-     * Для SophisticatedBackpacks >=3.x используется getComponent("upgrades") для получения апгрейдов.
+     * Для SophisticatedBackpacks (Forge, 3.x+) используется getUpgradeHandler().getUpgrades().
      */
     private void logAllBlockBackpacksWithDockyardUpgrade(Level level) {
         LOGGER.info("[DockyardUpgradeContainer] Все BLOCK BACKPACK с DockyardUpgrade:");
@@ -222,17 +238,32 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
                             List<?> upgrades = null;
                             try {
-                                Method getComponent = be.getClass().getMethod("getComponent", String.class);
-                                Object upgradesComponent = getComponent.invoke(be, "upgrades");
-                                if (upgradesComponent != null) {
-                                    Method getUpgrades = upgradesComponent.getClass().getMethod("getUpgrades");
-                                    Object upgradesObj = getUpgrades.invoke(upgradesComponent);
+                                Method getUpgradeHandler = be.getClass().getMethod("getUpgradeHandler");
+                                Object upgradeHandler = getUpgradeHandler.invoke(be);
+                                if (upgradeHandler != null) {
+                                    Method getUpgrades = upgradeHandler.getClass().getMethod("getUpgrades");
+                                    Object upgradesObj = getUpgrades.invoke(upgradeHandler);
                                     if (upgradesObj instanceof List<?>) {
                                         upgrades = (List<?>) upgradesObj;
                                     }
                                 }
+                            } catch (NoSuchMethodException e) {
+                                // Fallback: пробуем публичное поле upgradeHandler (редко, если нет метода)
+                                try {
+                                    Field upgradeHandlerField = be.getClass().getField("upgradeHandler");
+                                    Object upgradeHandler = upgradeHandlerField.get(be);
+                                    if (upgradeHandler != null) {
+                                        Method getUpgrades = upgradeHandler.getClass().getMethod("getUpgrades");
+                                        Object upgradesObj = getUpgrades.invoke(upgradeHandler);
+                                        if (upgradesObj instanceof List<?>) {
+                                            upgrades = (List<?>) upgradesObj;
+                                        }
+                                    }
+                                } catch (Exception e2) {
+                                    LOGGER.warn("[DockyardUpgradeContainer] BE at {}: Не найден апгрейд-обработчик: {}, {}", entry.getKey(), e, e2);
+                                }
                             } catch (Exception e) {
-                                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: не удалось получить апгрейды через getComponent(\"upgrades\")/getUpgrades: {}", entry.getKey(), e.toString());
+                                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: Ошибка при получении апгрейдов: {}", entry.getKey(), e);
                             }
 
                             if (upgrades != null) {
