@@ -17,6 +17,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -31,43 +32,37 @@ public class DockyardUpgradeLogic {
 
     /**
      * Основная точка входа для засовывания/выпуска корабля.
-     * Проверка: рюкзак открыт как блок (block entity) или как предмет (capability игрока).
-     *
-     * distinction между блоком и предметом делается:
-     * 1. Если контейнер поддерживает getDockyardBlockPos (метод getDockyardBlockPos()), тогда блок;
-     * 2. Иначе — capability игрока.
+     * distinction (item/block) реализован через storageWrapper.getBlockEntity(Level).
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
         Level level = null;
-        BlockPos blockPos = null;
 
-        // Получаем UpgradeWrapper и DockyardBlockPos из контейнера (если возможно)
+        // Получаем UpgradeWrapper из открытого DockyardUpgradeContainer (только из открытого GUI!)
         try {
             if (player != null && player.containerMenu != null) {
                 AbstractContainerMenu menu = player.containerMenu;
                 try {
-                    java.lang.reflect.Method m = menu.getClass().getMethod("getUpgradeWrapper");
+                    Method m = menu.getClass().getMethod("getUpgradeWrapper");
                     Object w = m.invoke(menu);
                     if (w instanceof DockyardUpgradeWrapper wupg) {
                         wrapper = wupg;
                         level = player.level();
 
-                        // distinction через getDockyardBlockPos
-                        BlockPos posFromContainer = null;
-                        try {
-                            java.lang.reflect.Method mBlockPos = menu.getClass().getMethod("getDockyardBlockPos");
-                            Object posObj = mBlockPos.invoke(menu);
-                            if (posObj instanceof BlockPos bp && level != null) {
-                                posFromContainer = bp;
-                                blockEntity = level.getBlockEntity(bp);
+                        // distinction через storageWrapper.getBlockEntity(Level)
+                        if (wrapper.getStorageWrapper() != null) {
+                            try {
+                                Method getBlockEntity = wrapper.getStorageWrapper().getClass().getMethod("getBlockEntity", Level.class);
+                                Object be = getBlockEntity.invoke(wrapper.getStorageWrapper(), level);
+                                if (be instanceof BlockEntity) {
+                                    blockEntity = (BlockEntity) be;
+                                }
+                            } catch (NoSuchMethodException e) {
+                                // Если метода нет — это предмет
+                            } catch (Exception e) {
+                                // ignore
                             }
-                        } catch (Exception ignore) {}
-
-                        blockPos = posFromContainer;
-                        if (blockEntity == null && level != null && blockPos != null) {
-                            blockEntity = level.getBlockEntity(blockPos);
                         }
                     }
                 } catch (Exception e) {
@@ -78,7 +73,7 @@ public class DockyardUpgradeLogic {
             // ignore
         }
 
-        final boolean isOpenedAsBlock = blockEntity != null && blockPos != null && blockEntity.getLevel() != null;
+        final boolean isOpenedAsBlock = blockEntity != null;
 
         // ----------- ЯВНОЕ логирование distinction -----------
         if (isOpenedAsBlock) {
@@ -115,7 +110,7 @@ public class DockyardUpgradeLogic {
 
             // Для blockentity ищем корабль строго над блоком, не рейтрейсом от игрока!
             ServerLevel serverLevel = player.serverLevel();
-            BlockPos pos = blockPos;
+            BlockPos pos = blockEntity.getBlockPos();
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
 
             if (ship != null) {
