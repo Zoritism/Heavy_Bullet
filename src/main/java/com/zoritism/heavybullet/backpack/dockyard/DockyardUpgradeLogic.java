@@ -17,6 +17,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -43,7 +44,7 @@ public class DockyardUpgradeLogic {
 
             // Получаем UpgradeWrapper
             try {
-                java.lang.reflect.Method m = menu.getClass().getMethod("getUpgradeWrapper");
+                Method m = menu.getClass().getMethod("getUpgradeWrapper");
                 Object w = m.invoke(menu);
                 if (w instanceof DockyardUpgradeWrapper wupg) {
                     wrapper = wupg;
@@ -51,10 +52,10 @@ public class DockyardUpgradeLogic {
 
                     // Получаем UpgradeContainer и через него BlockPos
                     try {
-                        java.lang.reflect.Method getUpgradeContainer = menu.getClass().getMethod("getUpgradeContainer");
+                        Method getUpgradeContainer = menu.getClass().getMethod("getUpgradeContainer");
                         Object upgradeContainerObj = getUpgradeContainer.invoke(menu);
                         if (upgradeContainerObj instanceof DockyardUpgradeContainer dockyardMenu) {
-                            blockPos = dockyardMenu.getOpenedBlockPos();
+                            blockPos = dockyardMenu.getOpenedBlockPos(); // <-- исправлено
                         }
                     } catch (NoSuchMethodException ignored) {
                     } catch (Exception ignored) {

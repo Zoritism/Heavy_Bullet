@@ -19,17 +19,27 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
     public DockyardUpgradeContainer(Player player, int upgradeContainerId, DockyardUpgradeWrapper upgradeWrapper, UpgradeContainerType<DockyardUpgradeWrapper, DockyardUpgradeContainer> type) {
         super(player, upgradeContainerId, upgradeWrapper, type);
 
-        // Получаем protected поле blockPos через reflection (SophisticatedBackpacks/SophisticatedCore)
         BlockPos pos = null;
-        try {
-            Field f = UpgradeContainerBase.class.getDeclaredField("blockPos");
-            f.setAccessible(true);
-            pos = (BlockPos) f.get(this);
-        } catch (Exception ignored) {}
+        // SophisticatedBackpacks distinction через контекст:
+        if (this instanceof net.p3pp3rf1y.sophisticatedbackpacks.common.gui.IContextAwareContainer contextAware) {
+            var context = contextAware.getBackpackContext();
+            var typeCtx = context.getType();
+            if (typeCtx == net.p3pp3rf1y.sophisticatedbackpacks.common.gui.BackpackContext.ContextType.BLOCK_BACKPACK ||
+                    typeCtx == net.p3pp3rf1y.sophisticatedbackpacks.common.gui.BackpackContext.ContextType.BLOCK_SUB_BACKPACK) {
+                pos = context.getBackpackPosition(player);
+            }
+        }
+        // Fallback для других случаев (через protected поле blockPos, если нет контекста)
+        if (pos == null) {
+            try {
+                Field f = UpgradeContainerBase.class.getDeclaredField("blockPos");
+                f.setAccessible(true);
+                pos = (BlockPos) f.get(this);
+            } catch (Exception ignored) {}
+        }
 
         this.dockyardBlockPos = pos;
 
-        // Логирование distinction при открытии контейнера
         if (this.dockyardBlockPos != null) {
             LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим BLOCK. BlockPos={}", this.dockyardBlockPos);
         } else {
