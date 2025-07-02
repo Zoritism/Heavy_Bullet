@@ -37,7 +37,6 @@ public class DockyardUpgradeLogic {
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
         Level level = null;
-
         BlockPos blockPos = null;
 
         try {
@@ -51,31 +50,17 @@ public class DockyardUpgradeLogic {
                         wrapper = wupg;
                         level = player.level();
 
-                        // Попробуем получить BlockPos блока через upgradeContainer, если контейнер открыт для блока
+                        // Корректно получаем BlockPos через getUpgradeContainer() и getOpenedBlockPos()
                         try {
                             Method getUpgradeContainer = menu.getClass().getMethod("getUpgradeContainer");
                             Object upgradeContainerObj = getUpgradeContainer.invoke(menu);
-                            if (upgradeContainerObj != null) {
-                                // Попробуем получить BlockPos, если есть метод getOpenedBlockPos
-                                try {
-                                    Method getOpenedBlockPos = upgradeContainerObj.getClass().getMethod("getOpenedBlockPos");
-                                    Object blockPosObj = getOpenedBlockPos.invoke(upgradeContainerObj);
-                                    if (blockPosObj instanceof BlockPos pos) {
-                                        blockPos = pos;
-                                    }
-                                } catch (NoSuchMethodException ignored2) {
-                                    // ignore
-                                } catch (Exception ignored2) {
-                                    // ignore
-                                }
+                            if (upgradeContainerObj instanceof DockyardUpgradeContainer dockyardMenu) {
+                                blockPos = dockyardMenu.getOpenedBlockPos();
                             }
-                        } catch (NoSuchMethodException ignored1) {
-                            // ignore
-                        } catch (Exception ignored1) {
-                            // ignore
+                        } catch (NoSuchMethodException ignored) {
+                        } catch (Exception ignored) {
                         }
 
-                        // Если есть blockPos, получаем blockEntity
                         if (blockPos != null && level != null) {
                             blockEntity = level.getBlockEntity(blockPos);
                         }
