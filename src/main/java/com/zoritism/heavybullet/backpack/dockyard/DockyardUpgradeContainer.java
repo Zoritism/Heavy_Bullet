@@ -55,7 +55,6 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
         // Логирование всех BLOCK BACKPACK с DockyardUpgrade (в чанках)
         if (!player.level().isClientSide) {
             logAllBlockBackpacksWithDockyardUpgrade(player.level());
-            // Новый дополнительный лог: ближайшие блоки-рюкзаки с DockyardUpgrade вокруг игрока (радиус 10)
             logNearbyBackpackBlocksWithDockyardUpgrade(player);
         }
 
@@ -64,10 +63,6 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
         }
     }
 
-    /**
-     * Логировать все блок-рюкзаки с DockyardUpgrade в радиусе 10 блоков вокруг игрока (координаты + WrapperID).
-     * Теперь поиск апгрейда Dockyard идёт напрямую через NBT ("Upgrades" тег).
-     */
     private void logNearbyBackpackBlocksWithDockyardUpgrade(Player player) {
         Level level = player.level();
         BlockPos playerPos = player.blockPosition();
@@ -80,43 +75,50 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
             BlockEntity be = level.getBlockEntity(pos);
             if (be == null) continue;
-
-            LOGGER.debug("[DockyardUpgradeContainer] BE at {}: class={}", pos, be.getClass().getName());
-
             String beClass = be.getClass().getName();
             if (!beClass.contains("sophisticatedbackpacks")) continue;
 
-            // === NBT поиск апгрейда Dockyard ===
+            LOGGER.debug("[DockyardUpgradeContainer] BE at {}: class={}", pos, be.getClass().getName());
+
+            // Логируем весь NBT для диагностики
             CompoundTag beTag = be.saveWithFullMetadata();
-            if (beTag.contains("Upgrades", 9)) { // 9 = ListTag
-                ListTag upgrades = beTag.getList("Upgrades", 10); // 10 = CompoundTag
-                for (int i = 0; i < upgrades.size(); i++) {
-                    CompoundTag upgTag = upgrades.getCompound(i);
-                    if (upgTag.contains("id") && upgTag.getString("id").equals("heavybullet:dockyard_upgrade")) {
-                        // Найден блок с нужным апгрейдом!
-                        String tempWrapperId = "NBT";
-                        LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK: Pos={}, WrapperID={}", be.getBlockPos(), tempWrapperId);
-                        foundAny = true;
-                        break;
-                    }
-                }
+            LOGGER.debug("[DockyardUpgradeContainer] NBT for {}: {}", pos, beTag);
+
+            boolean found = false;
+            // Сначала ищем в "Upgrades"
+            found = checkUpgradeList(beTag, "Upgrades", be.getBlockPos());
+            // Fallback: ищем в "upgrades" (на всякий случай)
+            if (!found) {
+                found = checkUpgradeList(beTag, "upgrades", be.getBlockPos());
             }
+            if (found) foundAny = true;
+            else
+                LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK at {}: DockyardUpgrade не найден (NBT: {})", be.getBlockPos(), beTag);
         }
         if (!foundAny) {
             LOGGER.info("[DockyardUpgradeContainer] Нет найденных блок-рюкзаков с DockyardUpgrade в радиусе 10 вокруг игрока.");
         }
     }
 
-    /**
-     * Сканирует все чанки и выводит координаты всех блок-рюкзаков с DockyardUpgrade, а также их WrapperID
-     * Поиск через NBT Upgrades.
-     */
+    private boolean checkUpgradeList(CompoundTag beTag, String upgradesKey, BlockPos pos) {
+        if (beTag.contains(upgradesKey, 9)) { // 9 = ListTag
+            ListTag upgrades = beTag.getList(upgradesKey, 10); // 10 = CompoundTag
+            for (int i = 0; i < upgrades.size(); i++) {
+                CompoundTag upgTag = upgrades.getCompound(i);
+                if (upgTag.contains("id") && upgTag.getString("id").equals("heavybullet:dockyard_upgrade")) {
+                    LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK: Pos={}, WrapperID={}", pos, "NBT");
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private void logAllBlockBackpacksWithDockyardUpgrade(Level level) {
         LOGGER.info("[DockyardUpgradeContainer] Все BLOCK BACKPACK с DockyardUpgrade:");
         int found = 0;
         if (level instanceof ServerLevel serverLevel) {
             try {
-                // chunkSource
                 Object chunkSource = null;
                 try {
                     Field chunkSourceField = ServerLevel.class.getDeclaredField("chunkSource");
@@ -136,7 +138,6 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                     return;
                 }
 
-                // chunkMap
                 Object chunkMap = null;
                 try {
                     Field chunkMapField = chunkSource.getClass().getDeclaredField("chunkMap");
@@ -156,7 +157,6 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                     return;
                 }
 
-                // chunkHolders (Iterable)
                 Iterable<?> chunkHolders = null;
                 for (Field field : chunkMap.getClass().getDeclaredFields()) {
                     if (Iterable.class.isAssignableFrom(field.getType())) {
@@ -174,7 +174,6 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                 }
 
                 for (Object chunkHolder : chunkHolders) {
-                    // getLastAvailable() возвращает Optional<LevelChunk>
                     try {
                         java.lang.reflect.Method getLastAvailable = chunkHolder.getClass().getMethod("getLastAvailable");
                         Object optionalChunk = getLastAvailable.invoke(chunkHolder);
@@ -192,19 +191,14 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                             if (!be.getClass().getName().contains("sophisticatedbackpacks")) continue;
 
                             CompoundTag beTag = be.saveWithFullMetadata();
-                            if (beTag.contains("Upgrades", 9)) { // 9 = ListTag
-                                ListTag upgrades = beTag.getList("Upgrades", 10); // 10 = CompoundTag
-                                for (int i = 0; i < upgrades.size(); i++) {
-                                    CompoundTag upgTag = upgrades.getCompound(i);
-                                    if (upgTag.contains("id") && upgTag.getString("id").equals("heavybullet:dockyard_upgrade")) {
-                                        // Найден блок с нужным апгрейдом!
-                                        String tempWrapperId = "NBT";
-                                        LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: BlockPos={} WrapperID={}", be.getBlockPos(), tempWrapperId);
-                                        found++;
-                                        break;
-                                    }
-                                }
-                            }
+                            LOGGER.debug("[DockyardUpgradeContainer] NBT for {}: {}", entry.getKey(), beTag);
+
+                            boolean hasUpgrade = false;
+                            hasUpgrade = checkUpgradeList(beTag, "Upgrades", be.getBlockPos());
+                            if (!hasUpgrade) hasUpgrade = checkUpgradeList(beTag, "upgrades", be.getBlockPos());
+                            if (hasUpgrade) found++;
+                            else
+                                LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK at {}: DockyardUpgrade не найден (NBT: {})", be.getBlockPos(), beTag);
                         }
                     } catch (Exception ignored) {}
                 }
@@ -217,9 +211,6 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
         }
     }
 
-    /**
-     * @return BlockPos если открыт как block entity, иначе null
-     */
     public BlockPos getOpenedBlockPos() {
         return dockyardBlockPos;
     }
