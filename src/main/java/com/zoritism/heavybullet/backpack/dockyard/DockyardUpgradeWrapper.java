@@ -4,12 +4,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.core.particles.ParticleTypes;
 import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.ITickableUpgrade;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeWrapperBase;
@@ -23,6 +19,11 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.function.Consumer;
 
+/**
+ * DockyardUpgradeWrapper: distinction теперь производится только при открытии интерфейса,
+ * и только через регистрацию BLOCK_MODE экземпляров в статическом сете.
+ * tick distinction не делает!
+ */
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
 
     private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeWrapper");
@@ -34,7 +35,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
     private static final int SHIP_RAY_DIST = 15;
 
-    // --- distinction BLOCK/ITEM через статический weak set ---
+    // distinction BLOCK/ITEM через статический weak set
     private static final Set<DockyardUpgradeWrapper> BLOCK_MODE_WRAPPERS =
             Collections.newSetFromMap(new WeakHashMap<>());
 
@@ -44,10 +45,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
 
-        // Логирование для отладки: что приходит в storageWrapper
-        System.out.println("[DockyardUpgradeWrapper] storageWrapper class = " + (storageWrapper != null ? storageWrapper.getClass().getName() : "null"));
-
-        // distinction сразу при создании: если storageWrapper связан с BlockEntity — BLOCK MODE
+        // distinction только при создании: если storageWrapper связан с BlockEntity — BLOCK MODE
         BlockEntity be = detectBlockEntity(storageWrapper);
         if (be != null) {
             BLOCK_MODE_WRAPPERS.add(this);
@@ -110,64 +108,55 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return ItemStack.EMPTY;
     }
 
-    @Nullable
-    public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
-        if (level == null || pos == null) return null;
-        BlockEntity be = level.getBlockEntity(pos);
-        return (be != null && !be.isRemoved()) ? be : null;
-    }
-
     @Override
     public boolean canBeDisabled() {
         return false;
     }
 
+    /**
+     * tick нужен только для фоновой анимации процесса засунуть корабль, distinction здесь не используется!
+     */
     @Override
-    public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
+    public void tick(@Nullable Entity entity, net.minecraft.world.level.Level level, BlockPos blockPos) {
         if (level.isClientSide) return;
 
-        if (entity == null && blockPos != null) {
-            // BLOCK MODE
-            LOGGER.info("[DockyardUpgradeWrapper] distinction: BLOCK MODE, blockPos={}", blockPos);
-            BlockEntity be = getStorageBlockEntity(level, blockPos);
-            if (be == null) {
+        // distinction не используется: tick работает только если процесс активен у блока
+        BlockEntity be = getStorageBlockEntity();
+        if (be == null) {
+            return;
+        }
+        CompoundTag tag = getPersistentData(be);
+
+        syncBackpackShipsToBlock(be);
+
+        if (tag.getBoolean(NBT_PROCESS_ACTIVE)) {
+            int ticks = tag.getInt(NBT_PROCESS_TICKS);
+            long shipId = tag.getLong(NBT_PROCESS_SHIP_ID);
+            int slot = tag.getInt(NBT_PROCESS_SLOT);
+
+            ticks++;
+            tag.putInt(NBT_PROCESS_TICKS, ticks);
+
+            ServerLevel serverLevel = (ServerLevel) be.getLevel();
+            if (serverLevel == null) return;
+            BlockPos realBlockPos = be.getBlockPos();
+            DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, realBlockPos, SHIP_RAY_DIST);
+            boolean shipValid = ship != null && ship.getId() == shipId;
+            if (!shipValid) {
+                clearProcess(tag, be);
                 return;
             }
-            CompoundTag tag = getPersistentData(be);
+            spawnDockyardParticles(serverLevel, realBlockPos, ship);
 
-            syncBackpackShipsToBlock(be);
-
-            if (tag.getBoolean(NBT_PROCESS_ACTIVE)) {
-                int ticks = tag.getInt(NBT_PROCESS_TICKS);
-                long shipId = tag.getLong(NBT_PROCESS_SHIP_ID);
-                int slot = tag.getInt(NBT_PROCESS_SLOT);
-
-                ticks++;
-                tag.putInt(NBT_PROCESS_TICKS, ticks);
-
-                ServerLevel serverLevel = (ServerLevel) level;
-                DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, blockPos, SHIP_RAY_DIST);
-                boolean shipValid = ship != null && ship.getId() == shipId;
-                if (!shipValid) {
-                    clearProcess(tag, be);
-                    return;
+            if (ticks >= ANIMATION_TICKS) {
+                CompoundTag shipNbt = new CompoundTag();
+                boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null);
+                if (result) {
+                    DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
+                    DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
                 }
-                spawnDockyardParticles(serverLevel, blockPos, ship);
-
-                if (ticks >= ANIMATION_TICKS) {
-                    CompoundTag shipNbt = new CompoundTag();
-                    boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null);
-                    if (result) {
-                        DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
-                        DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
-                    }
-                    clearProcess(tag, be);
-                }
+                clearProcess(tag, be);
             }
-        } else if (entity instanceof Player player) {
-            // ITEM MODE
-            LOGGER.info("[DockyardUpgradeWrapper] distinction: ITEM MODE, player={}", player.getName().getString());
-            // Здесь можно реализовать tick-логику для предмета, если понадобится
         }
     }
 
@@ -231,7 +220,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     private void spawnDockyardParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship) {
         Object vsShip = ship.getServerShip();
-        AABB aabb = tryGetShipAABB(vsShip);
+        net.minecraft.world.phys.AABB aabb = tryGetShipAABB(vsShip);
         if (aabb == null) {
             for (int i = 0; i < 4; i++) {
                 double sx = blockPos.getX() + 0.5 + (Math.random() - 0.5) * 4.0;
@@ -240,7 +229,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double dx = blockPos.getX() + 0.5;
                 double dy = blockPos.getY() + 1.2;
                 double dz = blockPos.getZ() + 0.5;
-                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 0, (dx-sx)/10, (dy-sy)/10, (dz-sz)/10, 0.01);
+                level.sendParticles(net.minecraft.core.particles.ParticleTypes.FLAME, sx, sy, sz, 0, (dx-sx)/10, (dy-sy)/10, (dz-sz)/10, 0.01);
             }
             return;
         }
@@ -256,12 +245,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             double sx = minX + Math.random() * (maxX - minX);
             double sy = minY + Math.random() * (maxY - minY);
             double sz = minZ + Math.random() * (maxZ - minZ);
-            level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 0, (dx-sx)/10, (dy-sy)/10, (dz-sz)/10, 0.01);
+            level.sendParticles(net.minecraft.core.particles.ParticleTypes.FLAME, sx, sy, sz, 0, (dx-sx)/10, (dy-sy)/10, (dz-sz)/10, 0.01);
         }
     }
 
     @Nullable
-    private AABB tryGetShipAABB(Object vsShip) {
+    private net.minecraft.world.phys.AABB tryGetShipAABB(Object vsShip) {
         if (vsShip == null) return null;
         try {
             Object aabbObj = vsShip.getClass().getMethod("getWorldAABB").invoke(vsShip);
@@ -272,7 +261,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
                 double maxY = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
                 double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
-                return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
+                return new net.minecraft.world.phys.AABB(minX, minY, minZ, maxX, maxY, maxZ);
             }
         } catch (Exception e) {
         }
