@@ -42,7 +42,6 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
         if (this.dockyardBlockPos != null) {
             LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим BLOCK. BlockPos={}", this.dockyardBlockPos);
-            // Логируем WrapperID и координаты только для BLOCK MODE
             DockyardUpgradeWrapper wrapper = getUpgradeWrapper();
             LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: Wrapper {}, BlockPos={}", wrapper, this.dockyardBlockPos);
         } else {
@@ -62,7 +61,12 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
             }
         }
         if (!found) {
-            LOGGER.info("[DockyardUpgradeContainer] Нет ни одного BLOCK MODE DockyardUpgrade!");
+            // Показываем текущий блок, даже если set пуст
+            if (this.dockyardBlockPos != null) {
+                LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: (current, not in set) BlockPos={}", this.dockyardBlockPos);
+            } else {
+                LOGGER.info("[DockyardUpgradeContainer] Нет ни одного BLOCK MODE DockyardUpgrade!");
+            }
         }
 
         if (!player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
