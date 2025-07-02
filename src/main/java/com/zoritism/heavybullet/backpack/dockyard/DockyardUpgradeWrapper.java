@@ -84,7 +84,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         if (entity == null && blockPos != null) {
             // BLOCK MODE
-            LOGGER.info("[DockyardUpgradeWrapper] distinction: BLOCK MODE");
             BlockEntity be = getStorageBlockEntity(level, blockPos);
             if (be == null) {
                 return;
@@ -117,18 +116,23 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 spawnDockyardParticles(serverLevel, blockPos, ship);
 
                 if (ticks >= ANIMATION_TICKS) {
+                    // Корабль найден и обратный отсчет закончен - помещаем корабль в слот в persistentData
                     CompoundTag shipNbt = new CompoundTag();
                     boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null);
                     if (result) {
+                        // Сохраняем NBT корабля в persistentData в правильный слот
                         DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
+                        // Удаляем корабль из мира
                         DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
+                        LOGIC_LOGGER.info("[DockyardUpgradeLogic] Ship stored to slot {} in dockyard upgrade", slot);
+                    } else {
+                        LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Failed to save ship to NBT for slot {}", slot);
                     }
                     clearProcess(tag, be);
                 }
             }
         } else if (entity instanceof Player player) {
             // ITEM MODE
-            LOGGER.info("[DockyardUpgradeWrapper] distinction: ITEM MODE, player={}", player.getName().getString());
             // tick-логика для предмета, если понадобится
         }
     }
