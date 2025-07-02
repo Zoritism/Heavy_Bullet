@@ -18,6 +18,9 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.function.Consumer;
 
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
@@ -31,11 +34,52 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
     private static final int SHIP_RAY_DIST = 15;
 
+    // --- distinction BLOCK/ITEM через статический weak set ---
+    private static final Set<DockyardUpgradeWrapper> BLOCK_MODE_WRAPPERS =
+            Collections.newSetFromMap(new WeakHashMap<>());
+
+    @Nullable
+    private BlockEntity cachedBlockEntity = null;
+
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
 
         // Логирование для отладки: что приходит в storageWrapper
         System.out.println("[DockyardUpgradeWrapper] storageWrapper class = " + (storageWrapper != null ? storageWrapper.getClass().getName() : "null"));
+
+        // distinction сразу при создании: если storageWrapper связан с BlockEntity — BLOCK MODE
+        BlockEntity be = detectBlockEntity(storageWrapper);
+        if (be != null) {
+            BLOCK_MODE_WRAPPERS.add(this);
+            cachedBlockEntity = be;
+            LOGGER.info("[DockyardUpgradeWrapper] Registered as BLOCK_MODE for block at {}", be.getBlockPos());
+        }
+    }
+
+    // Определить BlockEntity, если storageWrapper связан с блоком
+    @Nullable
+    private BlockEntity detectBlockEntity(IStorageWrapper wrapper) {
+        try {
+            Method m = wrapper.getClass().getMethod("getBlockEntity");
+            Object be = m.invoke(wrapper);
+            if (be instanceof BlockEntity blockEntity && !blockEntity.isRemoved()) {
+                return blockEntity;
+            }
+        } catch (NoSuchMethodException ignored) {
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /** Для distinction в UI: принадлежит ли этот wrapper блок-режиму? */
+    public static boolean isBlockModeWrapper(DockyardUpgradeWrapper wrapper) {
+        return BLOCK_MODE_WRAPPERS.contains(wrapper);
+    }
+
+    /** Для UI: получить BlockEntity, если BLOCK MODE */
+    @Nullable
+    public BlockEntity getStorageBlockEntity() {
+        return cachedBlockEntity;
     }
 
     public IStorageWrapper getStorageWrapper() {
@@ -66,10 +110,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return ItemStack.EMPTY;
     }
 
-    /**
-     * Получить BlockEntity для блока-рюкзака, если wrapper создан для установленного блока.
-     * ВАЖНО: SophisticatedBackpacks не гарантирует наличие getBlockEntity(), используйте параметры tick вместо этого!
-     */
     @Nullable
     public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
         if (level == null || pos == null) return null;
@@ -82,11 +122,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return false;
     }
 
-    /**
-     * distinction между блоком и предметом реализован как в SophisticatedBackpacks:
-     * Если entity == null и blockPos != null — мы в block entity (рюкзак в мире);
-     * Если entity instanceof Player — мы в руке/инвентаре (рюкзак как предмет).
-     */
     @Override
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
         if (level.isClientSide) return;
