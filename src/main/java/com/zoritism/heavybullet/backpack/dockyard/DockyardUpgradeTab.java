@@ -4,11 +4,6 @@ import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.StorageScreenBase;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeSettingsTab;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.controls.ButtonDefinition;
@@ -90,7 +85,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         ));
     }
 
-    // distinction реализован только через клиентский кэш!
     private boolean hasShipInSlot(int slot) {
         return DockyardClientCache.hasShipInSlot(slot);
     }
@@ -104,15 +98,10 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         boolean isBlockMode = container != null && container.isBlockMode();
         if (isBlockMode) {
             LOGGER.info("[DockyardUpgradeTab] Нажата кнопка: режим BLOCK");
-            // Здесь можно вставить специальную логику для block mode,
-            // если нужна реализация прямо на клиенте (например, открыть спец. окно или визуализацию).
         } else {
             LOGGER.info("[DockyardUpgradeTab] Нажата кнопка: режим ITEM");
-            // Здесь можно вставить специальную логику для item mode,
-            // если нужна реализация прямо на клиенте.
         }
 
-        // Отправляем стандартный пакет на сервер - сервер реализует distinction и нужную логику по режиму!
         boolean hasShip = hasShipInSlot(slot);
         NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
