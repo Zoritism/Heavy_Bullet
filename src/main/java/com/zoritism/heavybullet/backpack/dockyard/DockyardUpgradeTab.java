@@ -4,7 +4,7 @@ import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.core.BlockPos; // <--- добавлен импорт
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -19,14 +19,10 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.GuiHelper;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.Position;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.TextureBlitData;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
-
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeTab");
 
     private static final int TAB_WIDTH = 103;
     private static final int TAB_HEIGHT = 92;
@@ -113,73 +109,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     protected void renderBg(GuiGraphics graphics, Minecraft minecraft, int mouseX, int mouseY) {
         super.renderBg(graphics, minecraft, mouseX, mouseY);
 
-        // Логирование при первом открытии вкладки
-        if (!didLogOpen) {
-            didLogOpen = true;
-            LOGGER.info("[DockyardUpgradeTab] Открыт апгрейд Dockyard.");
-            LOGGER.info("[DockyardUpgradeTab] Экземпляр экрана: {}", screen.getClass().getName());
-            LOGGER.info("[DockyardUpgradeTab] Экземпляр контейнера: {}", getContainer().getClass().getName());
-
-            DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
-            String wrapperClass = wrapper != null ? wrapper.getClass().getName() : "null";
-            String storageWrapperClass = (wrapper != null && wrapper.getStorageWrapper() != null)
-                    ? wrapper.getStorageWrapper().getClass().getName() : "null";
-            LOGGER.info("[DockyardUpgradeTab] Wrapper: {}, StorageWrapper: {}", wrapper, storageWrapperClass);
-
-            // === Новый код: ищем ближайшие рюкзаки-блоки с апгрейдом Dockyard вокруг игрока ===
-            Player player = Minecraft.getInstance().player;
-            if (player != null && wrapper != null && player.level() != null) {
-                Level level = player.level();
-                BlockPos playerPos = player.blockPosition();
-                int radius = 10;
-                LOGGER.info("[DockyardUpgradeTab] Ближайшие рюкзаки-блоки с DockyardUpgrade в радиусе {} вокруг игрока {}:", radius, player.getName().getString());
-                for (BlockPos pos : BlockPos.betweenClosed(
-                        playerPos.offset(-radius, -radius, -radius),
-                        playerPos.offset(radius, radius, radius))) {
-
-                    BlockEntity be = level.getBlockEntity(pos);
-                    if (be == null) continue;
-                    String beClass = be.getClass().getName();
-                    if (!beClass.contains("sophisticatedbackpacks")) continue;
-
-                    // Пробуем обнаружить апгрейд Dockyard в апгрейдах BE
-                    try {
-                        var getUpgrades = be.getClass().getMethod("getUpgrades");
-                        Object upgradesObj = getUpgrades.invoke(be);
-                        if (upgradesObj instanceof java.util.List<?> upgrades) {
-                            for (Object stackObj : upgrades) {
-                                if (stackObj instanceof ItemStack stack && !stack.isEmpty()) {
-                                    if (stack.getItem().getClass().getName().contains("DockyardUpgradeItem")) {
-                                        // Найден рюкзак блок с апгрейдом!
-                                        // Получаем WrapperID (hashcode DockyardUpgradeWrapper)
-                                        String wrapperId = "null";
-                                        try {
-                                            // Найдём upgradeWrapper через getUpgrades, создаём новый
-                                            var upgradeItem = stack.getItem();
-                                            if (upgradeItem instanceof DockyardUpgradeItem dockyardUpgradeItem) {
-                                                var upgradeType = dockyardUpgradeItem.getType();
-                                                // Создаём storageWrapper для блока
-                                                var getStorageWrapper = be.getClass().getMethod("getStorageWrapper");
-                                                Object storageWrapperObj = getStorageWrapper.invoke(be);
-                                                if (storageWrapperObj instanceof net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper storageWrapper) {
-                                                    DockyardUpgradeWrapper tempWrapper = upgradeType.create(storageWrapper, stack, __ -> {});
-                                                    wrapperId = "wrapper" + Integer.toHexString(System.identityHashCode(tempWrapper));
-                                                }
-                                            }
-                                        } catch (Exception e) {
-                                            // Не получилось, пропустить
-                                        }
-                                        LOGGER.info("[DockyardUpgradeTab] BLOCK_BACKPACK: Pos={}, WrapperID={}", be.getBlockPos(), wrapperId);
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-            // === Конец нового кода ===
-        }
+        // Логика первого открытия вкладки убрана
 
         if (!isOpen) {
             return;

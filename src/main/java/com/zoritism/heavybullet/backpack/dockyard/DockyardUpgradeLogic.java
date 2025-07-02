@@ -13,8 +13,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
@@ -23,8 +21,6 @@ import java.util.Map;
 import java.util.UUID;
 
 public class DockyardUpgradeLogic {
-
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
 
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
         handleDockyardShipClick(player, 0, release);
@@ -55,7 +51,7 @@ public class DockyardUpgradeLogic {
                         Method getUpgradeContainer = menu.getClass().getMethod("getUpgradeContainer");
                         Object upgradeContainerObj = getUpgradeContainer.invoke(menu);
                         if (upgradeContainerObj instanceof DockyardUpgradeContainer dockyardMenu) {
-                            blockPos = dockyardMenu.getOpenedBlockPos(); // <-- исправлено
+                            blockPos = dockyardMenu.getOpenedBlockPos();
                         }
                     } catch (NoSuchMethodException ignored) {
                     } catch (Exception ignored) {
@@ -71,14 +67,6 @@ public class DockyardUpgradeLogic {
         }
 
         final boolean isOpenedAsBlock = blockEntity != null;
-
-        // ----------- logging distinction -----------
-        if (isOpenedAsBlock) {
-            LOGGER.info("[DockyardUpgradeLogic] Mode: BLOCK at {}", blockEntity.getBlockPos());
-        } else {
-            LOGGER.info("[DockyardUpgradeLogic] Mode: ITEM");
-        }
-        // --------------------------------------------
 
         // =============== BLOCKENTITY LOGIC ===============
         if (isOpenedAsBlock) {
