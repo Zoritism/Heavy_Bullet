@@ -131,10 +131,10 @@ public class DockyardUpgradeLogic {
             ServerShipHandle ship = findShipPlayerIsLookingAt(player, 4.0);
             if (ship != null) {
                 CompoundTag shipNbt = new CompoundTag();
-                boolean result = saveShipToNbt(ship, shipNbt, player);
+                boolean result = saveShipToNbt(player.serverLevel(), ship, shipNbt, player);
                 if (result) {
                     dockyardData.put(key, shipNbt);
-                    boolean removed = removeShipFromWorld(ship, player);
+                    boolean removed = removeShipFromWorld(ship, player.serverLevel());
                     if (removed) {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_stored"), true);
                         syncDockyardToClient(player);
@@ -241,17 +241,9 @@ public class DockyardUpgradeLogic {
         }
     }
 
-    // Исправление: player может быть null при тике блока, не вызываем методы если player == null
-    private static boolean saveShipToNbt(ServerShipHandle ship, CompoundTag nbt, @Nullable ServerPlayer player) {
+    // Новый вариант: всегда передавать ServerLevel явно!
+    private static boolean saveShipToNbt(ServerLevel level, ServerShipHandle ship, CompoundTag nbt, @Nullable ServerPlayer player) {
         if (ship == null) {
-            return false;
-        }
-        ServerLevel level;
-        if (player != null) {
-            level = player.serverLevel();
-        } else {
-            // Fallback: нельзя сериализовать без уровня
-            LOGGER.error("[DockyardUpgradeLogic] saveShipToNbt: player is null, cannot get ServerLevel, aborting save");
             return false;
         }
         UUID uuid = UUID.randomUUID();
@@ -263,12 +255,12 @@ public class DockyardUpgradeLogic {
         }
     }
 
-    public static boolean saveShipToNbtPublic(ServerShipHandle ship, CompoundTag nbt, @Nullable ServerPlayer player) {
-        return saveShipToNbt(ship, nbt, player);
+    public static boolean saveShipToNbtPublic(ServerLevel level, ServerShipHandle ship, CompoundTag nbt, @Nullable ServerPlayer player) {
+        return saveShipToNbt(level, ship, nbt, player);
     }
 
-    public static boolean removeShipFromWorldPublic(ServerShipHandle ship, ServerPlayer player) {
-        return removeShipFromWorld(ship, player);
+    public static boolean removeShipFromWorldPublic(ServerShipHandle ship, ServerLevel level) {
+        return removeShipFromWorld(ship, level);
     }
 
     private static boolean spawnShipFromNbt(ServerPlayer player, CompoundTag nbt) {
@@ -283,15 +275,8 @@ public class DockyardUpgradeLogic {
         }
     }
 
-    private static boolean removeShipFromWorld(ServerShipHandle ship, ServerPlayer player) {
-        if (ship == null) {
-            return false;
-        }
-        ServerLevel level;
-        if (player != null) {
-            level = player.serverLevel();
-        } else {
-            // Без уровня не получится удалить корабль
+    private static boolean removeShipFromWorld(ServerShipHandle ship, ServerLevel level) {
+        if (ship == null || level == null) {
             return false;
         }
         try {

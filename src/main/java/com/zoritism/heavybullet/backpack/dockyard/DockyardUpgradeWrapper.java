@@ -118,12 +118,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 if (ticks >= ANIMATION_TICKS) {
                     // Корабль найден и обратный отсчет закончен - помещаем корабль в слот в persistentData
                     CompoundTag shipNbt = new CompoundTag();
-                    boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null);
+                    boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(serverLevel, ship, shipNbt, null);
                     if (result) {
                         // Сохраняем NBT корабля в persistentData в правильный слот
                         DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
                         // Удаляем корабль из мира
-                        DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
+                        DockyardUpgradeLogic.removeShipFromWorldPublic(ship, serverLevel);
                         LOGIC_LOGGER.info("[DockyardUpgradeLogic] Ship stored to slot {} in dockyard upgrade", slot);
                     } else {
                         LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Failed to save ship to NBT for slot {}", slot);
