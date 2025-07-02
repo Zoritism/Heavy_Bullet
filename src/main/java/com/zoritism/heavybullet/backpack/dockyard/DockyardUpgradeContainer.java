@@ -48,15 +48,13 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
         this.dockyardBlockPos = pos;
 
-        if (this.dockyardBlockPos != null) {
-            LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим BLOCK. BlockPos={}", this.dockyardBlockPos);
-            DockyardUpgradeWrapper wrapper = getUpgradeWrapper();
-            LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: Wrapper {}, BlockPos={}", wrapper, this.dockyardBlockPos);
-        } else {
-            LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим ITEM (инвентарь).");
-        }
+        // Лог WrapperID для открытого рюкзака (инвентарь или блок)
+        DockyardUpgradeWrapper wrapper = getUpgradeWrapper();
+        String wrapperId = wrapper != null ? "wrapper" + Integer.toHexString(System.identityHashCode(wrapper)) : "null";
+        LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим {}. WrapperID={}",
+                (this.dockyardBlockPos != null ? "BLOCK. BlockPos=" + this.dockyardBlockPos : "ITEM (инвентарь)"), wrapperId);
 
-        // Логирование ВСЕХ блок-рюкзаков с DockyardUpgrade при открытии любого интерфейса рюкзака
+        // Логирование всех BLOCK BACKPACK с DockyardUpgrade
         if (!player.level().isClientSide) {
             logAllBlockBackpacksWithDockyardUpgrade(player.level());
         }
@@ -67,7 +65,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
     }
 
     /**
-     * Сканирует все чанки и выводит координаты всех блок-рюкзаков с DockyardUpgrade
+     * Сканирует все чанки и выводит координаты всех блок-рюкзаков с DockyardUpgrade, а также их WrapperID
      */
     private void logAllBlockBackpacksWithDockyardUpgrade(Level level) {
         LOGGER.info("[DockyardUpgradeContainer] Все BLOCK BACKPACK с DockyardUpgrade:");
@@ -155,7 +153,25 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                                     for (Object stackObj : upgrades) {
                                         if (stackObj instanceof ItemStack stack && !stack.isEmpty()) {
                                             if (stack.getItem().getClass().getName().contains("DockyardUpgradeItem")) {
-                                                LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: BlockPos={}", be.getBlockPos());
+                                                // Для WrapperID создаём временный DockyardUpgradeWrapper
+                                                String wrapperId = "null";
+                                                try {
+                                                    // Получаем upgradeType через item
+                                                    var upgradeItem = stack.getItem();
+                                                    if (upgradeItem instanceof DockyardUpgradeItem dockyardUpgradeItem) {
+                                                        var upgradeType = dockyardUpgradeItem.getType();
+                                                        // Получаем storageWrapper для блока
+                                                        var getStorageWrapper = be.getClass().getMethod("getStorageWrapper");
+                                                        Object storageWrapperObj = getStorageWrapper.invoke(be);
+                                                        if (storageWrapperObj instanceof net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper storageWrapper) {
+                                                            DockyardUpgradeWrapper tempWrapper = upgradeType.create(storageWrapper, stack, __ -> {});
+                                                            wrapperId = "wrapper" + Integer.toHexString(System.identityHashCode(tempWrapper));
+                                                        }
+                                                    }
+                                                } catch (Exception e) {
+                                                    // ignore
+                                                }
+                                                LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: BlockPos={} WrapperID={}", be.getBlockPos(), wrapperId);
                                                 found++;
                                                 break;
                                             }

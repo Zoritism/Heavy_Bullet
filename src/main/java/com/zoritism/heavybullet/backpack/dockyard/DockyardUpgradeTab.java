@@ -4,6 +4,10 @@ import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.core.BlockPos; // <--- добавлен импорт
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.StorageScreenBase;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeSettingsTab;
@@ -122,20 +126,59 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                     ? wrapper.getStorageWrapper().getClass().getName() : "null";
             LOGGER.info("[DockyardUpgradeTab] Wrapper: {}, StorageWrapper: {}", wrapper, storageWrapperClass);
 
-            LOGGER.info("[DockyardUpgradeTab] Все BLOCK MODE DockyardUpgrade:");
-            boolean found = false;
-            for (DockyardUpgradeWrapper w : DockyardUpgradeWrapper.getAllBlockModeWrappers()) {
-                if (w != null) {
-                    BlockEntity be = w.getStorageBlockEntity();
-                    if (be != null && !be.isRemoved()) {
-                        found = true;
-                        LOGGER.info("[DockyardUpgradeTab] BLOCK MODE: Wrapper {}, BlockPos={}", w, be.getBlockPos());
-                    }
+            // === Новый код: ищем ближайшие рюкзаки-блоки с апгрейдом Dockyard вокруг игрока ===
+            Player player = Minecraft.getInstance().player;
+            if (player != null && wrapper != null && player.level() != null) {
+                Level level = player.level();
+                BlockPos playerPos = player.blockPosition();
+                int radius = 10;
+                LOGGER.info("[DockyardUpgradeTab] Ближайшие рюкзаки-блоки с DockyardUpgrade в радиусе {} вокруг игрока {}:", radius, player.getName().getString());
+                for (BlockPos pos : BlockPos.betweenClosed(
+                        playerPos.offset(-radius, -radius, -radius),
+                        playerPos.offset(radius, radius, radius))) {
+
+                    BlockEntity be = level.getBlockEntity(pos);
+                    if (be == null) continue;
+                    String beClass = be.getClass().getName();
+                    if (!beClass.contains("sophisticatedbackpacks")) continue;
+
+                    // Пробуем обнаружить апгрейд Dockyard в апгрейдах BE
+                    try {
+                        var getUpgrades = be.getClass().getMethod("getUpgrades");
+                        Object upgradesObj = getUpgrades.invoke(be);
+                        if (upgradesObj instanceof java.util.List<?> upgrades) {
+                            for (Object stackObj : upgrades) {
+                                if (stackObj instanceof ItemStack stack && !stack.isEmpty()) {
+                                    if (stack.getItem().getClass().getName().contains("DockyardUpgradeItem")) {
+                                        // Найден рюкзак блок с апгрейдом!
+                                        // Получаем WrapperID (hashcode DockyardUpgradeWrapper)
+                                        String wrapperId = "null";
+                                        try {
+                                            // Найдём upgradeWrapper через getUpgrades, создаём новый
+                                            var upgradeItem = stack.getItem();
+                                            if (upgradeItem instanceof DockyardUpgradeItem dockyardUpgradeItem) {
+                                                var upgradeType = dockyardUpgradeItem.getType();
+                                                // Создаём storageWrapper для блока
+                                                var getStorageWrapper = be.getClass().getMethod("getStorageWrapper");
+                                                Object storageWrapperObj = getStorageWrapper.invoke(be);
+                                                if (storageWrapperObj instanceof net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper storageWrapper) {
+                                                    DockyardUpgradeWrapper tempWrapper = upgradeType.create(storageWrapper, stack, __ -> {});
+                                                    wrapperId = "wrapper" + Integer.toHexString(System.identityHashCode(tempWrapper));
+                                                }
+                                            }
+                                        } catch (Exception e) {
+                                            // Не получилось, пропустить
+                                        }
+                                        LOGGER.info("[DockyardUpgradeTab] BLOCK_BACKPACK: Pos={}, WrapperID={}", be.getBlockPos(), wrapperId);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
                 }
             }
-            if (!found) {
-                LOGGER.info("[DockyardUpgradeTab] Нет ни одного BLOCK MODE DockyardUpgrade!");
-            }
+            // === Конец нового кода ===
         }
 
         if (!isOpen) {
