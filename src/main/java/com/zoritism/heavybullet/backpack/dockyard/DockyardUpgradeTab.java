@@ -19,10 +19,14 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.GuiHelper;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.Position;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.TextureBlitData;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
+
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeTab");
 
     private static final int TAB_WIDTH = 103;
     private static final int TAB_HEIGHT = 92;
@@ -96,6 +100,19 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     }
 
     private void handleSlotButtonClick(int slot) {
+        DockyardUpgradeContainer container = getContainer();
+        boolean isBlockMode = container != null && container.isBlockMode();
+        if (isBlockMode) {
+            LOGGER.info("[DockyardUpgradeTab] Нажата кнопка: режим BLOCK");
+            // Здесь можно вставить специальную логику для block mode,
+            // если нужна реализация прямо на клиенте (например, открыть спец. окно или визуализацию).
+        } else {
+            LOGGER.info("[DockyardUpgradeTab] Нажата кнопка: режим ITEM");
+            // Здесь можно вставить специальную логику для item mode,
+            // если нужна реализация прямо на клиенте.
+        }
+
+        // Отправляем стандартный пакет на сервер - сервер реализует distinction и нужную логику по режиму!
         boolean hasShip = hasShipInSlot(slot);
         NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
@@ -108,8 +125,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     @Override
     protected void renderBg(GuiGraphics graphics, Minecraft minecraft, int mouseX, int mouseY) {
         super.renderBg(graphics, minecraft, mouseX, mouseY);
-
-        // Логика первого открытия вкладки убрана
 
         if (!isOpen) {
             return;
