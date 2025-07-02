@@ -64,6 +64,8 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     private static final int BUTTON1_Y = FIELD1_Y + (FIELD_HEIGHT / 2) - 8;
     private static final int BUTTON2_Y = FIELD2_Y + (FIELD_HEIGHT / 2) - 8;
 
+    private boolean didLogOpen = false;
+
     public DockyardUpgradeTab(DockyardUpgradeContainer upgradeContainer, Position position, StorageScreenBase<?> screen) {
         super(upgradeContainer, position, screen,
                 net.minecraft.network.chat.Component.translatable("gui.heavybullet.dockyard.title"),
@@ -141,7 +143,23 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     protected void renderBg(GuiGraphics graphics, Minecraft minecraft, int mouseX, int mouseY) {
         super.renderBg(graphics, minecraft, mouseX, mouseY);
 
-
+        // Логирование при первом открытии вкладки
+        if (!didLogOpen) {
+            didLogOpen = true;
+            LOGGER.info("[DockyardUpgradeTab] Открыт апгрейд Dockyard.");
+            LOGGER.info("[DockyardUpgradeTab] Экземпляр экрана: {}", screen.getClass().getName());
+            LOGGER.info("[DockyardUpgradeTab] Экземпляр контейнера: {}", getContainer().getClass().getName());
+            DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
+            LOGGER.info("[DockyardUpgradeTab] Wrapper: {}, StorageWrapper: {}", wrapper, wrapper != null ? wrapper.getStorageWrapper().getClass().getName() : "null");
+            if (wrapper != null) {
+                try {
+                    Object be = wrapper.getStorageBlockEntity();
+                    LOGGER.info("[DockyardUpgradeTab] getStorageBlockEntity(): {}", be != null ? be.getClass().getName() : "null");
+                } catch (Exception e) {
+                    LOGGER.info("[DockyardUpgradeTab] getStorageBlockEntity() exception: {}", e.toString());
+                }
+            }
+        }
 
         if (!isOpen) {
             return;
