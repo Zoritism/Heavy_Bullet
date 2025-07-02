@@ -4,6 +4,7 @@ import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.StorageScreenBase;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeSettingsTab;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.controls.ButtonDefinition;
@@ -85,7 +86,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         ));
     }
 
-    // distinction реализован только через клиентский кэш!
     private boolean hasShipInSlot(int slot) {
         return DockyardClientCache.hasShipInSlot(slot);
     }
@@ -122,14 +122,18 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             LOGGER.info("[DockyardUpgradeTab] Wrapper: {}, StorageWrapper: {}", wrapper, storageWrapperClass);
 
             LOGGER.info("[DockyardUpgradeTab] Все BLOCK MODE DockyardUpgrade:");
+            boolean found = false;
             for (DockyardUpgradeWrapper w : DockyardUpgradeWrapper.getAllBlockModeWrappers()) {
                 if (w != null) {
-                    String wStr = w.toString();
-                    var be = w.getStorageBlockEntity();
+                    BlockEntity be = w.getStorageBlockEntity();
                     if (be != null && !be.isRemoved()) {
-                        LOGGER.info("[DockyardUpgradeTab] BLOCK MODE: Wrapper {}, BlockPos={}", wStr, be.getBlockPos());
+                        found = true;
+                        LOGGER.info("[DockyardUpgradeTab] BLOCK MODE: Wrapper {}, BlockPos={}", w, be.getBlockPos());
                     }
                 }
+            }
+            if (!found) {
+                LOGGER.info("[DockyardUpgradeTab] Нет ни одного BLOCK MODE DockyardUpgrade!");
             }
         }
 
