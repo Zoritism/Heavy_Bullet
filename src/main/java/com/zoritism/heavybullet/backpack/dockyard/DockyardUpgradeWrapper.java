@@ -4,7 +4,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -28,7 +27,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final String NBT_PROCESS_SHIP_ID = "DockyardProcessShipId";
     private static final String NBT_PROCESS_SLOT = "DockyardProcessSlot";
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
-    private static final int SHIP_RAY_DIST = 15;
+    private static final int SHIP_RAY_DIST = 20; // теперь 20 блоков вверх
 
     // distinction BLOCK/ITEM через статический weak set
     private static final Set<DockyardUpgradeWrapper> BLOCK_MODE_WRAPPERS =
@@ -113,13 +112,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     /**
-     * tick нужен только для фоновой анимации процесса засунуть корабль, distinction здесь не используется!
+     * tick нужен для фоновой анимации процесса засунуть корабль (BLOCK MODE).
      */
     @Override
     public void tick(@Nullable Entity entity, net.minecraft.world.level.Level level, BlockPos blockPos) {
         if (level.isClientSide) return;
 
-        // distinction не используется: tick работает только если процесс активен у блока
         BlockEntity be = getStorageBlockEntity();
         if (be == null) {
             return;
@@ -139,12 +137,16 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             ServerLevel serverLevel = (ServerLevel) be.getLevel();
             if (serverLevel == null) return;
             BlockPos realBlockPos = be.getBlockPos();
+
+            // Проверяем КАЖДЫЙ ТИК, что корабль всё ещё обнаруживается рейтрейсом вверх и id совпадает
             DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, realBlockPos, SHIP_RAY_DIST);
             boolean shipValid = ship != null && ship.getId() == shipId;
             if (!shipValid) {
                 clearProcess(tag, be);
                 return;
             }
+
+            // Спавним частицы ("огоньки") между кораблём и рюкзаком
             spawnDockyardParticles(serverLevel, realBlockPos, ship);
 
             if (ticks >= ANIMATION_TICKS) {
@@ -217,10 +219,14 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return null;
     }
 
+    /**
+     * Спавн частиц из случайных позиций внутри рамки корабля (расширенной) к точке чуть выше центра блока рюкзака.
+     */
     private void spawnDockyardParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship) {
         Object vsShip = ship.getServerShip();
         net.minecraft.world.phys.AABB aabb = tryGetShipAABB(vsShip);
         if (aabb == null) {
+            // fallback: частицы из воздуха над рюкзаком
             for (int i = 0; i < 4; i++) {
                 double sx = blockPos.getX() + 0.5 + (Math.random() - 0.5) * 4.0;
                 double sy = blockPos.getY() + 4 + Math.random() * 4.0;
@@ -232,7 +238,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             }
             return;
         }
-        double margin = 2.0;
+        double margin = 3.0;
         double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
         double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
         double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
@@ -240,7 +246,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         double dy = blockPos.getY() + 1.2;
         double dz = blockPos.getZ() + 0.5;
 
-        for (int i = 0; i < 8; i++) {
+        // 10 частиц за тик, из случайных точек рамки корабля
+        for (int i = 0; i < 10; i++) {
             double sx = minX + Math.random() * (maxX - minX);
             double sy = minY + Math.random() * (maxY - minY);
             double sz = minZ + Math.random() * (maxZ - minZ);

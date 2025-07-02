@@ -96,7 +96,8 @@ public class DockyardUpgradeLogic {
             // Для blockentity ищем корабль строго над блоком, не рейтрейсом от игрока!
             ServerLevel serverLevel = player.serverLevel();
             BlockPos pos = blockEntity.getBlockPos();
-            ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
+            // Важно: теперь ищем корабль вверх на 20 блоков!
+            ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 20.0);
 
             if (ship != null) {
                 // Проверка: если уже идёт процесс засовывания в этот слот — не запускать второй раз
