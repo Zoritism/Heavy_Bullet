@@ -6,12 +6,35 @@ import net.minecraft.world.entity.player.Player;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerBase;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerType;
 import net.minecraft.server.level.ServerPlayer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.lang.reflect.Field;
 
 public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgradeWrapper, DockyardUpgradeContainer> {
 
-    // Используем поле UpgradeContainerBase для хранения blockPos (только если открыт для блока)
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeContainer");
+    private final BlockPos dockyardBlockPos;
+
     public DockyardUpgradeContainer(Player player, int upgradeContainerId, DockyardUpgradeWrapper upgradeWrapper, UpgradeContainerType<DockyardUpgradeWrapper, DockyardUpgradeContainer> type) {
         super(player, upgradeContainerId, upgradeWrapper, type);
+
+        // Получаем protected поле blockPos через reflection (SophisticatedBackpacks/SophisticatedCore)
+        BlockPos pos = null;
+        try {
+            Field f = UpgradeContainerBase.class.getDeclaredField("blockPos");
+            f.setAccessible(true);
+            pos = (BlockPos) f.get(this);
+        } catch (Exception ignored) {}
+
+        this.dockyardBlockPos = pos;
+
+        // Логирование distinction при открытии контейнера
+        if (this.dockyardBlockPos != null) {
+            LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим BLOCK. BlockPos={}", this.dockyardBlockPos);
+        } else {
+            LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим ITEM (инвентарь).");
+        }
 
         if (!player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
             DockyardUpgradeLogic.syncDockyardToClient(serverPlayer);
@@ -19,11 +42,10 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
     }
 
     /**
-     * SophisticatedBackpacks сам прокидывает blockPos в UpgradeContainerBase, если контейнер открыт для блока.
-     * Просто вызываем getBlockPos() базового класса.
+     * @return BlockPos если открыт как block entity, иначе null
      */
     public BlockPos getOpenedBlockPos() {
-        return super.getBlockPos();
+        return dockyardBlockPos;
     }
 
     @Override

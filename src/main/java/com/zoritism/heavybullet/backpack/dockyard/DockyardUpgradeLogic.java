@@ -17,7 +17,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -39,38 +38,35 @@ public class DockyardUpgradeLogic {
         Level level = null;
         BlockPos blockPos = null;
 
-        try {
-            if (player != null && player.containerMenu != null) {
-                AbstractContainerMenu menu = player.containerMenu;
-                // Получаем UpgradeWrapper
-                try {
-                    Method m = menu.getClass().getMethod("getUpgradeWrapper");
-                    Object w = m.invoke(menu);
-                    if (w instanceof DockyardUpgradeWrapper wupg) {
-                        wrapper = wupg;
-                        level = player.level();
+        if (player != null && player.containerMenu != null) {
+            AbstractContainerMenu menu = player.containerMenu;
 
-                        // Корректно получаем BlockPos через getUpgradeContainer() и getOpenedBlockPos()
-                        try {
-                            Method getUpgradeContainer = menu.getClass().getMethod("getUpgradeContainer");
-                            Object upgradeContainerObj = getUpgradeContainer.invoke(menu);
-                            if (upgradeContainerObj instanceof DockyardUpgradeContainer dockyardMenu) {
-                                blockPos = dockyardMenu.getOpenedBlockPos();
-                            }
-                        } catch (NoSuchMethodException ignored) {
-                        } catch (Exception ignored) {
-                        }
+            // Получаем UpgradeWrapper
+            try {
+                java.lang.reflect.Method m = menu.getClass().getMethod("getUpgradeWrapper");
+                Object w = m.invoke(menu);
+                if (w instanceof DockyardUpgradeWrapper wupg) {
+                    wrapper = wupg;
+                    level = player.level();
 
-                        if (blockPos != null && level != null) {
-                            blockEntity = level.getBlockEntity(blockPos);
+                    // Получаем UpgradeContainer и через него BlockPos
+                    try {
+                        java.lang.reflect.Method getUpgradeContainer = menu.getClass().getMethod("getUpgradeContainer");
+                        Object upgradeContainerObj = getUpgradeContainer.invoke(menu);
+                        if (upgradeContainerObj instanceof DockyardUpgradeContainer dockyardMenu) {
+                            blockPos = dockyardMenu.getOpenedBlockPos();
                         }
+                    } catch (NoSuchMethodException ignored) {
+                    } catch (Exception ignored) {
                     }
-                } catch (Exception e) {
-                    // ignore
+
+                    if (blockPos != null && level != null) {
+                        blockEntity = level.getBlockEntity(blockPos);
+                    }
                 }
+            } catch (Exception e) {
+                // ignore
             }
-        } catch (Exception e) {
-            // ignore
         }
 
         final boolean isOpenedAsBlock = blockEntity != null;
