@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -17,69 +18,24 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.function.Consumer;
 
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
 
     private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeWrapper");
     private static final Logger LOGIC_LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
+
     private static final String NBT_PROCESS_ACTIVE = "DockyardProcessActive";
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
     private static final String NBT_PROCESS_SHIP_ID = "DockyardProcessShipId";
     private static final String NBT_PROCESS_SLOT = "DockyardProcessSlot";
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
-    private static final int SHIP_RAY_DIST = 20; // теперь 20 блоков вверх
-
-    // distinction BLOCK/ITEM через статический weak set
-    private static final Set<DockyardUpgradeWrapper> BLOCK_MODE_WRAPPERS =
-            Collections.newSetFromMap(new WeakHashMap<>());
-
-    @Nullable
-    private BlockEntity cachedBlockEntity = null;
+    private static final int SHIP_RAY_DIST = 15;
 
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
-
-        // distinction только при создании: если storageWrapper связан с BlockEntity — BLOCK MODE
-        BlockEntity be = detectBlockEntity(storageWrapper);
-        if (be != null) {
-            BLOCK_MODE_WRAPPERS.add(this);
-            cachedBlockEntity = be;
-        }
-    }
-
-    // Определить BlockEntity, если storageWrapper связан с блоком
-    @Nullable
-    private BlockEntity detectBlockEntity(IStorageWrapper wrapper) {
-        try {
-            Method m = wrapper.getClass().getMethod("getBlockEntity");
-            Object be = m.invoke(wrapper);
-            if (be instanceof BlockEntity blockEntity && !blockEntity.isRemoved()) {
-                return blockEntity;
-            }
-        } catch (NoSuchMethodException ignored) {
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
-    /** Для distinction в UI: принадлежит ли этот wrapper блок-режиму? */
-    public static boolean isBlockModeWrapper(DockyardUpgradeWrapper wrapper) {
-        return BLOCK_MODE_WRAPPERS.contains(wrapper);
-    }
-
-    /** Для UI: получить BlockEntity, если BLOCK MODE */
-    @Nullable
-    public BlockEntity getStorageBlockEntity() {
-        return cachedBlockEntity;
-    }
-
-    /** Получить snapshot всех BLOCK MODE DockyardUpgradeWrapper для логирования */
-    public static java.util.Set<DockyardUpgradeWrapper> getAllBlockModeWrappers() {
-        return java.util.Collections.unmodifiableSet(BLOCK_MODE_WRAPPERS);
+        // Для отладки: выводим класс storageWrapper
+        System.out.println("[DockyardUpgradeWrapper] storageWrapper class = " + (storageWrapper != null ? storageWrapper.getClass().getName() : "null"));
     }
 
     public IStorageWrapper getStorageWrapper() {
@@ -110,64 +66,70 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return ItemStack.EMPTY;
     }
 
+    @Nullable
+    public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
+        if (level == null || pos == null) return null;
+        BlockEntity be = level.getBlockEntity(pos);
+        return (be != null && !be.isRemoved()) ? be : null;
+    }
+
     @Override
     public boolean canBeDisabled() {
         return false;
     }
 
-    /**
-     * tick нужен для фоновой анимации процесса засунуть корабль (BLOCK MODE).
-     */
     @Override
-    public void tick(@Nullable Entity entity, net.minecraft.world.level.Level level, BlockPos blockPos) {
+    public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
         if (level.isClientSide) return;
 
-        BlockEntity be = getStorageBlockEntity();
-        if (be == null) {
-            return;
-        }
-        CompoundTag tag = getPersistentData(be);
-
-        syncBackpackShipsToBlock(be);
-
-        if (tag.getBoolean(NBT_PROCESS_ACTIVE)) {
-            int ticks = tag.getInt(NBT_PROCESS_TICKS);
-            long shipId = tag.getLong(NBT_PROCESS_SHIP_ID);
-            int slot = tag.getInt(NBT_PROCESS_SLOT);
-
-            ticks++;
-            tag.putInt(NBT_PROCESS_TICKS, ticks);
-
-            ServerLevel serverLevel = (ServerLevel) be.getLevel();
-            if (serverLevel == null) return;
-            BlockPos realBlockPos = be.getBlockPos();
-
-            // Проверяем КАЖДЫЙ ТИК, что корабль всё ещё обнаруживается рейтрейсом вверх и id совпадает
-            DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, realBlockPos, SHIP_RAY_DIST);
-            boolean shipValid = ship != null && ship.getId() == shipId;
-            if (!shipValid) {
-                clearProcess(tag, be);
+        if (entity == null && blockPos != null) {
+            // BLOCK MODE
+            LOGGER.info("[DockyardUpgradeWrapper] distinction: BLOCK MODE, blockPos={}", blockPos);
+            BlockEntity be = getStorageBlockEntity(level, blockPos);
+            if (be == null) {
                 return;
             }
+            CompoundTag tag = getPersistentData(be);
 
-            // Лог каждую секунду (каждые 20 тиков, то есть каждую секунду)
-            if (ticks == 1 || ticks % 20 == 0) {
-                int secondsLeft = Math.max((ANIMATION_TICKS - ticks) / 20, 0);
-                LOGIC_LOGGER.info("[DockyardUpgradeLogic] seconds_left: {}", secondsLeft);
-            }
+            syncBackpackShipsToBlock(be);
 
-            // Спавним частицы ("огоньки") между кораблём и рюкзаком
-            spawnDockyardParticles(serverLevel, realBlockPos, ship);
+            if (tag.getBoolean(NBT_PROCESS_ACTIVE)) {
+                int ticks = tag.getInt(NBT_PROCESS_TICKS);
+                long shipId = tag.getLong(NBT_PROCESS_SHIP_ID);
+                int slot = tag.getInt(NBT_PROCESS_SLOT);
 
-            if (ticks >= ANIMATION_TICKS) {
-                CompoundTag shipNbt = new CompoundTag();
-                boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null);
-                if (result) {
-                    DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
-                    DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
+                ticks++;
+                tag.putInt(NBT_PROCESS_TICKS, ticks);
+
+                // Логирование обратного отсчёта каждую секунду
+                if (ticks == 1 || ticks % 20 == 0) {
+                    int secondsLeft = Math.max((ANIMATION_TICKS - ticks) / 20, 0);
+                    LOGIC_LOGGER.info("[DockyardUpgradeLogic] seconds_left: {}", secondsLeft);
                 }
-                clearProcess(tag, be);
+
+                ServerLevel serverLevel = (ServerLevel) level;
+                DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, blockPos, SHIP_RAY_DIST);
+                boolean shipValid = ship != null && ship.getId() == shipId;
+                if (!shipValid) {
+                    clearProcess(tag, be);
+                    return;
+                }
+                spawnDockyardParticles(serverLevel, blockPos, ship);
+
+                if (ticks >= ANIMATION_TICKS) {
+                    CompoundTag shipNbt = new CompoundTag();
+                    boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null);
+                    if (result) {
+                        DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
+                        DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
+                    }
+                    clearProcess(tag, be);
+                }
             }
+        } else if (entity instanceof Player player) {
+            // ITEM MODE
+            LOGGER.info("[DockyardUpgradeWrapper] distinction: ITEM MODE, player={}", player.getName().getString());
+            // tick-логика для предмета, если понадобится
         }
     }
 
@@ -229,14 +191,10 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return null;
     }
 
-    /**
-     * Спавн частиц из случайных позиций внутри рамки корабля (расширенной) к точке чуть выше центра блока рюкзака.
-     */
     private void spawnDockyardParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship) {
         Object vsShip = ship.getServerShip();
-        net.minecraft.world.phys.AABB aabb = tryGetShipAABB(vsShip);
+        AABB aabb = tryGetShipAABB(vsShip);
         if (aabb == null) {
-            // fallback: частицы из воздуха над рюкзаком
             for (int i = 0; i < 4; i++) {
                 double sx = blockPos.getX() + 0.5 + (Math.random() - 0.5) * 4.0;
                 double sy = blockPos.getY() + 4 + Math.random() * 4.0;
@@ -248,7 +206,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             }
             return;
         }
-        double margin = 3.0;
+        double margin = 2.0;
         double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
         double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
         double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
@@ -256,8 +214,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         double dy = blockPos.getY() + 1.2;
         double dz = blockPos.getZ() + 0.5;
 
-        // 10 частиц за тик, из случайных точек рамки корабля
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 8; i++) {
             double sx = minX + Math.random() * (maxX - minX);
             double sy = minY + Math.random() * (maxY - minY);
             double sz = minZ + Math.random() * (maxZ - minZ);
@@ -266,7 +223,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     @Nullable
-    private net.minecraft.world.phys.AABB tryGetShipAABB(Object vsShip) {
+    private AABB tryGetShipAABB(Object vsShip) {
         if (vsShip == null) return null;
         try {
             Object aabbObj = vsShip.getClass().getMethod("getWorldAABB").invoke(vsShip);
@@ -277,7 +234,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
                 double maxY = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
                 double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
-                return new net.minecraft.world.phys.AABB(minX, minY, minZ, maxX, maxY, maxZ);
+                return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
             }
         } catch (Exception e) {
         }
