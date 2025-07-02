@@ -115,18 +115,20 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             LOGGER.info("[DockyardUpgradeTab] Экземпляр экрана: {}", screen.getClass().getName());
             LOGGER.info("[DockyardUpgradeTab] Экземпляр контейнера: {}", getContainer().getClass().getName());
 
-            // Логирование Wrapper и StorageWrapper
             DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
             String wrapperClass = wrapper != null ? wrapper.getClass().getName() : "null";
             String storageWrapperClass = (wrapper != null && wrapper.getStorageWrapper() != null)
                     ? wrapper.getStorageWrapper().getClass().getName() : "null";
             LOGGER.info("[DockyardUpgradeTab] Wrapper: {}, StorageWrapper: {}", wrapper, storageWrapperClass);
 
-            // Логирование BLOCK MODE рюкзаков с координатами
             LOGGER.info("[DockyardUpgradeTab] Все BLOCK MODE DockyardUpgrade:");
             for (DockyardUpgradeWrapper w : DockyardUpgradeWrapper.getAllBlockModeWrappers()) {
-                if (w != null && w.getStorageBlockEntity() != null) {
-                    LOGGER.info("[DockyardUpgradeTab] BLOCK MODE: Wrapper {}, BlockPos={}", w, w.getStorageBlockEntity().getBlockPos());
+                if (w != null) {
+                    String wStr = w.toString();
+                    var be = w.getStorageBlockEntity();
+                    if (be != null && !be.isRemoved()) {
+                        LOGGER.info("[DockyardUpgradeTab] BLOCK MODE: Wrapper {}, BlockPos={}", wStr, be.getBlockPos());
+                    }
                 }
             }
         }

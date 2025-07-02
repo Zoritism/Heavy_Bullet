@@ -81,9 +81,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     /** Получить snapshot всех BLOCK MODE DockyardUpgradeWrapper для логирования */
-    public static Set<DockyardUpgradeWrapper> getAllBlockModeWrappers() {
-        // Возвращаем копию для избежания ConcurrentModificationException
-        return Collections.unmodifiableSet(BLOCK_MODE_WRAPPERS);
+    public static java.util.Set<DockyardUpgradeWrapper> getAllBlockModeWrappers() {
+        return java.util.Collections.unmodifiableSet(BLOCK_MODE_WRAPPERS);
     }
 
     public IStorageWrapper getStorageWrapper() {
