@@ -15,17 +15,12 @@ import net.minecraftforge.registries.RegisterEvent;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeGuiManager;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerRegistry;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerType;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.player.Player;
 
 @Mod("heavybullet")
 public class HeavyBullet {
 
     public static final UpgradeContainerType<DockyardUpgradeWrapper, DockyardUpgradeContainer> DOCKYARD_TYPE =
-            new UpgradeContainerType<>(
-                    (Player player, int containerId, DockyardUpgradeWrapper wrapper, UpgradeContainerType<DockyardUpgradeWrapper, DockyardUpgradeContainer> type, BlockPos blockPos) ->
-                            new DockyardUpgradeContainer(player, containerId, wrapper, type, blockPos)
-            );
+            new UpgradeContainerType<>(DockyardUpgradeContainer::new);
 
     public HeavyBullet() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
