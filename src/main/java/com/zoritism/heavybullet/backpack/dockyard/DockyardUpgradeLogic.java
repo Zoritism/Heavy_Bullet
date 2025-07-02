@@ -33,7 +33,7 @@ public class DockyardUpgradeLogic {
      * Основная точка входа для засовывания/выпуска корабля.
      * Проверка: рюкзак открыт как блок (block entity) или как предмет (capability игрока).
      *
-     * Исправлено: distinction между блоком и предметом делается как в SophisticatedBackpacks:
+     * distinction между блоком и предметом делается:
      * 1. Если контейнер поддерживает getDockyardBlockPos (метод getDockyardBlockPos()), тогда блок;
      * 2. Иначе — capability игрока.
      */
@@ -54,7 +54,7 @@ public class DockyardUpgradeLogic {
                         wrapper = wupg;
                         level = player.level();
 
-                        // Новый подход: distinction через getDockyardBlockPos (как в SB distinction через storageWrapper)
+                        // distinction через getDockyardBlockPos
                         BlockPos posFromContainer = null;
                         try {
                             java.lang.reflect.Method mBlockPos = menu.getClass().getMethod("getDockyardBlockPos");
@@ -78,15 +78,15 @@ public class DockyardUpgradeLogic {
             // ignore
         }
 
-        // Проверка: открыт как блок или как предмет?
         final boolean isOpenedAsBlock = blockEntity != null && blockPos != null && blockEntity.getLevel() != null;
 
-        // Логирование результата проверки
+        // ----------- ЯВНОЕ логирование distinction -----------
         if (isOpenedAsBlock) {
-            LOGGER.info("[DockyardUpgradeLogic] Проверка режима: рюкзак открыт как БЛОК (BlockEntity) на позиции {}", blockEntity.getBlockPos());
+            LOGGER.info("[DockyardUpgradeLogic] Mode: BLOCK at {}", blockEntity.getBlockPos());
         } else {
-            LOGGER.info("[DockyardUpgradeLogic] Проверка режима: рюкзак открыт как ПРЕДМЕТ (ItemStack/capability)");
+            LOGGER.info("[DockyardUpgradeLogic] Mode: ITEM");
         }
+        // -----------------------------------------------------
 
         // ================= BLOCKENTITY LOGIC =================
         if (isOpenedAsBlock) {

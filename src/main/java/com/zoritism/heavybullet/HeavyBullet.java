@@ -15,12 +15,17 @@ import net.minecraftforge.registries.RegisterEvent;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeGuiManager;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerRegistry;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerType;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.player.Player;
 
 @Mod("heavybullet")
 public class HeavyBullet {
 
     public static final UpgradeContainerType<DockyardUpgradeWrapper, DockyardUpgradeContainer> DOCKYARD_TYPE =
-            new UpgradeContainerType<>(DockyardUpgradeContainer::new);
+            new UpgradeContainerType<>(
+                    (Player player, int containerId, DockyardUpgradeWrapper wrapper, UpgradeContainerType<DockyardUpgradeWrapper, DockyardUpgradeContainer> type, BlockPos blockPos) ->
+                            new DockyardUpgradeContainer(player, containerId, wrapper, type, blockPos)
+            );
 
     public HeavyBullet() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
@@ -35,7 +40,6 @@ public class HeavyBullet {
     }
 
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
-        // Можно добавить предмет апгрейда в creative tab, если нужно
         event.accept(ModItems.DOCKYARD_UPGRADE);
     }
 
@@ -43,8 +47,6 @@ public class HeavyBullet {
         if (!event.getRegistryKey().equals(ForgeRegistries.Keys.MENU_TYPES)) {
             return;
         }
-        // Критически важно: регистрация апгрейда через UpgradeContainerRegistry,
-        // чтобы SophisticatedBackpacks мог корректно передавать storageWrapper блока
         UpgradeContainerRegistry.register(ModItems.DOCKYARD_UPGRADE.getId(), DOCKYARD_TYPE);
 
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
