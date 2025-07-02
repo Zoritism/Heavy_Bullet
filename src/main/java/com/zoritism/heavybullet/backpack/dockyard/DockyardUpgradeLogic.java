@@ -12,6 +12,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -19,6 +21,8 @@ import java.util.Map;
 import java.util.UUID;
 
 public class DockyardUpgradeLogic {
+
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
 
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
         handleDockyardShipClick(player, 0, release);
@@ -55,6 +59,17 @@ public class DockyardUpgradeLogic {
         // Проверка: открыт как блок или как предмет?
         final boolean isOpenedAsBlock = blockEntity != null;
         final BlockPos blockPos = isOpenedAsBlock ? blockEntity.getBlockPos() : null;
+
+        // Логирование результата проверки
+        if (isOpenedAsBlock) {
+            if (blockEntity != null) {
+                LOGGER.info("[DockyardUpgradeLogic] Проверка режима: рюкзак открыт как БЛОК (BlockEntity) на позиции {}", blockEntity.getBlockPos());
+            } else {
+                LOGGER.info("[DockyardUpgradeLogic] Проверка режима: рюкзак открыт как БЛОК (BlockEntity), но blockEntity == null");
+            }
+        } else {
+            LOGGER.info("[DockyardUpgradeLogic] Проверка режима: рюкзак открыт как ПРЕДМЕТ (ItemStack/capability)");
+        }
 
         // ================= BLOCKENTITY LOGIC =================
         if (isOpenedAsBlock) {
