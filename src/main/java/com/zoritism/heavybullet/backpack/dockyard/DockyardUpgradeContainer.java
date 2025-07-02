@@ -42,6 +42,9 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
         if (this.dockyardBlockPos != null) {
             LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим BLOCK. BlockPos={}", this.dockyardBlockPos);
+            // Логируем WrapperID и координаты только для BLOCK MODE
+            DockyardUpgradeWrapper wrapper = getUpgradeWrapper();
+            LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: Wrapper {}, BlockPos={}", wrapper, this.dockyardBlockPos);
         } else {
             LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим ITEM (инвентарь).");
         }
