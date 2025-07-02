@@ -23,47 +23,20 @@ import java.util.UUID;
 public class DockyardUpgradeLogic {
 
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
-        handleDockyardShipClick(player, 0, release);
+        handleDockyardShipClick(player, 0, release, false, 0L);
     }
 
     /**
-     * distinction block/item реализован через BlockEntity, определяемый через BlockPos в контейнере.
+     * Новый перегруженный метод — distinction block/item передаётся явно с клиента.
      */
-    public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
-        DockyardUpgradeWrapper wrapper = null;
+    public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release, boolean blockMode, long blockPosLong) {
         BlockEntity blockEntity = null;
-        Level level = null;
         BlockPos blockPos = null;
+        Level level = player.level();
 
-        if (player != null && player.containerMenu != null) {
-            AbstractContainerMenu menu = player.containerMenu;
-
-            // Получаем UpgradeWrapper
-            try {
-                Method m = menu.getClass().getMethod("getUpgradeWrapper");
-                Object w = m.invoke(menu);
-                if (w instanceof DockyardUpgradeWrapper wupg) {
-                    wrapper = wupg;
-                    level = player.level();
-
-                    // Получаем UpgradeContainer и через него BlockPos
-                    try {
-                        Method getUpgradeContainer = menu.getClass().getMethod("getUpgradeContainer");
-                        Object upgradeContainerObj = getUpgradeContainer.invoke(menu);
-                        if (upgradeContainerObj instanceof DockyardUpgradeContainer dockyardMenu) {
-                            blockPos = dockyardMenu.getOpenedBlockPos();
-                        }
-                    } catch (NoSuchMethodException ignored) {
-                    } catch (Exception ignored) {
-                    }
-
-                    if (blockPos != null && level != null) {
-                        blockEntity = level.getBlockEntity(blockPos);
-                    }
-                }
-            } catch (Exception e) {
-                // ignore
-            }
+        if (blockMode && blockPosLong != 0L && level instanceof ServerLevel serverLevel) {
+            blockPos = BlockPos.of(blockPosLong);
+            blockEntity = serverLevel.getBlockEntity(blockPos);
         }
 
         final boolean isOpenedAsBlock = blockEntity != null;
@@ -94,7 +67,7 @@ public class DockyardUpgradeLogic {
             }
 
             // Для blockentity ищем корабль строго над блоком, не рейтрейсом от игрока!
-            ServerLevel serverLevel = player.serverLevel();
+            ServerLevel serverLevel = (ServerLevel) level;
             BlockPos pos = blockEntity.getBlockPos();
             // Важно: теперь ищем корабль вверх на 20 блоков!
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 20.0);
@@ -174,6 +147,27 @@ public class DockyardUpgradeLogic {
         if (player != null) {
             player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
         }
+    }
+
+    // Старая версия — для совместимости, использует reflection для distinction
+    public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
+        // Извлекаем distinction через container + reflection
+        boolean blockMode = false;
+        long blockPosLong = 0L;
+        if (player != null && player.containerMenu != null) {
+            try {
+                java.lang.reflect.Method getUpgradeContainer = player.containerMenu.getClass().getMethod("getUpgradeContainer");
+                Object cont = getUpgradeContainer.invoke(player.containerMenu);
+                if (cont instanceof DockyardUpgradeContainer duc) {
+                    blockMode = duc.isBlockMode();
+                    BlockPos pos = duc.getOpenedBlockPos();
+                    if (blockMode && pos != null) {
+                        blockPosLong = pos.asLong();
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        handleDockyardShipClick(player, slotIndex, release, blockMode, blockPosLong);
     }
 
     public static void syncDockyardToClient(ServerPlayer player) {

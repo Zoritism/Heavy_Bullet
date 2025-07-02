@@ -92,15 +92,10 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     }
 
     private void handleSlotButtonClick(int slot) {
-        // distinction теперь только через DockyardClientCache!
         boolean isBlockMode = DockyardClientCache.getBlockMode();
-        if (isBlockMode) {
-            LOGGER.info("[DockyardUpgradeTab] Нажата кнопка: режим BLOCK");
-        } else {
-            LOGGER.info("[DockyardUpgradeTab] Нажата кнопка: режим ITEM");
-        }
+        long blockPos = DockyardClientCache.getBlockPos();
         boolean hasShip = hasShipInSlot(slot);
-        NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
+        NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip, isBlockMode, blockPos));
     }
 
     @Override
