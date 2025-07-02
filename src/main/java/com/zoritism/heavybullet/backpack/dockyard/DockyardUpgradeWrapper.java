@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
 
     private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeWrapper");
+    private static final Logger LOGIC_LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
     private static final String NBT_PROCESS_ACTIVE = "DockyardProcessActive";
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
     private static final String NBT_PROCESS_SHIP_ID = "DockyardProcessShipId";
@@ -149,11 +150,10 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 return;
             }
 
-            // Лог каждую секунду (каждые 20 тиков)
+            // Лог каждую секунду (каждые 20 тиков, то есть каждую секунду)
             if (ticks == 1 || ticks % 20 == 0) {
                 int secondsLeft = Math.max((ANIMATION_TICKS - ticks) / 20, 0);
-                Logger logicLogger = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
-                logicLogger.info("[DockyardUpgradeLogic] seconds_left: {}", secondsLeft);
+                LOGIC_LOGGER.info("[DockyardUpgradeLogic] seconds_left: {}", secondsLeft);
             }
 
             // Спавним частицы ("огоньки") между кораблём и рюкзаком
