@@ -84,7 +84,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         if (entity == null && blockPos != null) {
             // BLOCK MODE
-            LOGGER.info("[DockyardUpgradeWrapper] distinction: BLOCK MODE, blockPos={}", blockPos);
+            LOGGER.info("[DockyardUpgradeWrapper] distinction: BLOCK MODE");
             BlockEntity be = getStorageBlockEntity(level, blockPos);
             if (be == null) {
                 return;

@@ -241,11 +241,19 @@ public class DockyardUpgradeLogic {
         }
     }
 
-    private static boolean saveShipToNbt(ServerShipHandle ship, CompoundTag nbt, ServerPlayer player) {
+    // Исправление: player может быть null при тике блока, не вызываем методы если player == null
+    private static boolean saveShipToNbt(ServerShipHandle ship, CompoundTag nbt, @Nullable ServerPlayer player) {
         if (ship == null) {
             return false;
         }
-        ServerLevel level = player.serverLevel();
+        ServerLevel level;
+        if (player != null) {
+            level = player.serverLevel();
+        } else {
+            // Fallback: нельзя сериализовать без уровня
+            LOGGER.error("[DockyardUpgradeLogic] saveShipToNbt: player is null, cannot get ServerLevel, aborting save");
+            return false;
+        }
         UUID uuid = UUID.randomUUID();
 
         try {
@@ -255,7 +263,7 @@ public class DockyardUpgradeLogic {
         }
     }
 
-    public static boolean saveShipToNbtPublic(ServerShipHandle ship, CompoundTag nbt, ServerPlayer player) {
+    public static boolean saveShipToNbtPublic(ServerShipHandle ship, CompoundTag nbt, @Nullable ServerPlayer player) {
         return saveShipToNbt(ship, nbt, player);
     }
 
@@ -279,7 +287,13 @@ public class DockyardUpgradeLogic {
         if (ship == null) {
             return false;
         }
-        ServerLevel level = player.serverLevel();
+        ServerLevel level;
+        if (player != null) {
+            level = player.serverLevel();
+        } else {
+            // Без уровня не получится удалить корабль
+            return false;
+        }
         try {
             VModSchematicJavaHelper.removeShip(level, ship);
             return true;
