@@ -48,25 +48,25 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
             LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим ITEM (инвентарь).");
         }
 
-        // Логируем список всех BLOCK MODE DockyardUpgradeWrapper с координатами блоков
-        LOGGER.info("[DockyardUpgradeContainer] Все BLOCK MODE DockyardUpgrade:");
+        // ГАРАНТИРОВАННО выводим координаты всех блоков с апгрейдом, если они есть в мире
+        // (ВНИМАНИЕ: этот код гарантирует только вывод текущего BLOCK MODE, остальные блоки будут выведены если set заполнен)
+        if (this.dockyardBlockPos != null) {
+            LOGGER.info("[DockyardUpgradeContainer] [LOG ALWAYS] BLOCK MODE открыт на координатах: {}", this.dockyardBlockPos);
+        }
+
+        // Логируем список всех BLOCK MODE DockyardUpgradeWrapper с координатами блоков — только если set не пуст
         boolean found = false;
         for (DockyardUpgradeWrapper w : DockyardUpgradeWrapper.getAllBlockModeWrappers()) {
             if (w != null) {
                 var be = w.getStorageBlockEntity();
                 if (be != null && !be.isRemoved()) {
                     found = true;
-                    LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: Wrapper {}, BlockPos={}", w, be.getBlockPos());
+                    LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE (set): Wrapper {}, BlockPos={}", w, be.getBlockPos());
                 }
             }
         }
         if (!found) {
-            // Показываем текущий блок, даже если set пуст
-            if (this.dockyardBlockPos != null) {
-                LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: (current, not in set) BlockPos={}", this.dockyardBlockPos);
-            } else {
-                LOGGER.info("[DockyardUpgradeContainer] Нет ни одного BLOCK MODE DockyardUpgrade!");
-            }
+            LOGGER.info("[DockyardUpgradeContainer] Нет ни одного зарегистрированного BLOCK MODE DockyardUpgrade (set пуст).");
         }
 
         if (!player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
