@@ -3,6 +3,7 @@ package com.zoritism.heavybullet.backpack.dockyard;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -18,6 +19,7 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
@@ -29,12 +31,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
     private static final String NBT_PROCESS_SHIP_ID = "DockyardProcessShipId";
     private static final String NBT_PROCESS_SLOT = "DockyardProcessSlot";
+    private static final String NBT_PROCESS_PLAYER_UUID = "DockyardProcessPlayerUUID";
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
     private static final int SHIP_RAY_DIST = 15;
 
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
-        // Для отладки: выводим класс storageWrapper
         System.out.println("[DockyardUpgradeWrapper] storageWrapper class = " + (storageWrapper != null ? storageWrapper.getClass().getName() : "null"));
     }
 
@@ -116,18 +118,38 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 spawnDockyardParticles(serverLevel, blockPos, ship);
 
                 if (ticks >= ANIMATION_TICKS) {
-                    // Корабль найден и обратный отсчет закончен - помещаем корабль в слот в persistentData
                     CompoundTag shipNbt = new CompoundTag();
-                    boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(serverLevel, ship, shipNbt, null);
-                    if (result) {
-                        // Сохраняем NBT корабля в persistentData в правильный слот
-                        DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
-                        // Удаляем корабль из мира
-                        DockyardUpgradeLogic.removeShipFromWorldPublic(ship, serverLevel);
-                        LOGIC_LOGGER.info("[DockyardUpgradeLogic] Ship stored to slot {} in dockyard upgrade", slot);
-                    } else {
-                        LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Failed to save ship to NBT for slot {}", slot);
+
+                    // Получить UUID игрока, который начал процесс
+                    UUID playerUuid = tag.hasUUID(NBT_PROCESS_PLAYER_UUID) ? tag.getUUID(NBT_PROCESS_PLAYER_UUID) : null;
+                    ServerPlayer player = null;
+                    if (playerUuid != null) {
+                        player = serverLevel.getServer().getPlayerList().getPlayer(playerUuid);
                     }
+
+                    boolean result = false;
+                    if (player != null) {
+                        // Сохраняем в capability игрока
+                        result = VModSchematicJavaHelper.tryStoreShipToPlayerDockyard(
+                                serverLevel,
+                                player,
+                                UUID.randomUUID(),
+                                ship,
+                                shipNbt,
+                                slot
+                        );
+                        if (result) {
+                            LOGIC_LOGGER.info("[DockyardUpgradeLogic] Ship stored to player {} slot {}", player.getGameProfile().getName(), slot);
+                        } else {
+                            LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Failed to save ship to player {} slot {}", player.getGameProfile().getName(), slot);
+                        }
+                    } else {
+                        LOGIC_LOGGER.warn("[DockyardUpgradeLogic] No player UUID found or player offline, ship NOT stored");
+                    }
+
+                    // В любом случае удаляем корабль из мира (чтобы не дюпать)
+                    DockyardUpgradeLogic.removeShipFromWorldPublic(ship, serverLevel);
+
                     clearProcess(tag, be);
                 }
             }
@@ -137,13 +159,21 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         }
     }
 
-    public static void startInsertShipProcess(BlockEntity be, int slot, long shipId) {
+    public static void startInsertShipProcess(BlockEntity be, int slot, long shipId, UUID playerUuid) {
         CompoundTag tag = getPersistentDataStatic(be);
         tag.putBoolean(NBT_PROCESS_ACTIVE, true);
         tag.putInt(NBT_PROCESS_TICKS, 0);
         tag.putLong(NBT_PROCESS_SHIP_ID, shipId);
         tag.putInt(NBT_PROCESS_SLOT, slot);
+        if (playerUuid != null) {
+            tag.putUUID(NBT_PROCESS_PLAYER_UUID, playerUuid);
+        }
         be.setChanged();
+    }
+
+    // Старый вариант только для обратной совместимости (без передачи UUID)
+    public static void startInsertShipProcess(BlockEntity be, int slot, long shipId) {
+        startInsertShipProcess(be, slot, shipId, null);
     }
 
     private void clearProcess(CompoundTag tag, BlockEntity be) {
@@ -151,6 +181,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         tag.putInt(NBT_PROCESS_TICKS, 0);
         tag.putLong(NBT_PROCESS_SHIP_ID, 0L);
         tag.putInt(NBT_PROCESS_SLOT, -1);
+        tag.remove(NBT_PROCESS_PLAYER_UUID);
         be.setChanged();
     }
 

@@ -87,7 +87,8 @@ public class DockyardUpgradeLogic {
                     return;
                 }
                 // --- ЗАПУСК АНИМАЦИИ ЗАСОВЫВАНИЯ КОРАБЛЯ ---
-                DockyardUpgradeWrapper.startInsertShipProcess(blockEntity, slotIndex, ship.getId());
+                // Сохраняем UUID игрока, который нажал кнопку (player)
+                DockyardUpgradeWrapper.startInsertShipProcess(blockEntity, slotIndex, ship.getId(), player.getUUID());
 
                 LOGGER.info("[DockyardUpgradeLogic] process_started");
                 LOGGER.info("[DockyardUpgradeLogic] seconds_left: {}", ANIMATION_TICKS / 20);
@@ -241,7 +242,6 @@ public class DockyardUpgradeLogic {
         }
     }
 
-    // Новый вариант: всегда передавать ServerLevel явно!
     private static boolean saveShipToNbt(ServerLevel level, ServerShipHandle ship, CompoundTag nbt, @Nullable ServerPlayer player) {
         if (ship == null) {
             return false;
