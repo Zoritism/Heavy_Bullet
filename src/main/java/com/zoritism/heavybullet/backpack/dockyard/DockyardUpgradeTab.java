@@ -4,9 +4,6 @@ import com.zoritism.heavybullet.network.C2SHandleDockyardShipPacket;
 import com.zoritism.heavybullet.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.StorageScreenBase;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.UpgradeSettingsTab;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.controls.ButtonDefinition;
@@ -17,7 +14,6 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.GuiHelper;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.Position;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.TextureBlitData;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
-import net.minecraft.nbt.CompoundTag;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -89,52 +85,13 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         ));
     }
 
-    // Получаем BlockPos для поиска BlockEntity — distinction через контейнер!
-    private BlockPos getBlockPosForBlockEntity() {
-        return getContainer().getDockyardBlockPos();
-    }
-
-    // distinction: true если открыт рюкзак как блок, иначе false
-    private boolean isBlockEntityOpened() {
-        DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
-        if (wrapper == null) return false;
-        Level level = Minecraft.getInstance().level;
-        BlockPos blockPos = getBlockPosForBlockEntity();
-        if (level == null || blockPos == null) return false;
-        BlockEntity be = wrapper.getStorageBlockEntity(level, blockPos);
-        return be != null;
-    }
-
+    // distinction реализован только через клиентский кэш!
     private boolean hasShipInSlot(int slot) {
-        if (isBlockEntityOpened()) {
-            DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
-            Level level = Minecraft.getInstance().level;
-            BlockPos blockPos = getBlockPosForBlockEntity();
-            BlockEntity be = wrapper.getStorageBlockEntity(level, blockPos);
-            return DockyardDataHelper.hasShipInBlockSlot(be, slot);
-        } else {
-            // capability игрока — используем клиентский кэш!
-            return DockyardClientCache.hasShipInSlot(slot);
-        }
+        return DockyardClientCache.hasShipInSlot(slot);
     }
 
     private String getStoredShipName(int slot) {
-        if (isBlockEntityOpened()) {
-            DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
-            Level level = Minecraft.getInstance().level;
-            BlockPos blockPos = getBlockPosForBlockEntity();
-            BlockEntity be = wrapper.getStorageBlockEntity(level, blockPos);
-            CompoundTag ship = DockyardDataHelper.getShipFromBlockSlot(be, slot);
-            if (ship != null) {
-                if (ship.contains("vs_ship_name")) return ship.getString("vs_ship_name");
-                if (ship.contains("vs_ship_id")) return "id:" + ship.getLong("vs_ship_id");
-                return "<ship>";
-            }
-            return "";
-        } else {
-            // capability игрока — используем клиентский кэш!
-            return DockyardClientCache.getShipIdOrName(slot);
-        }
+        return DockyardClientCache.getShipIdOrName(slot);
     }
 
     private void handleSlotButtonClick(int slot) {
@@ -157,18 +114,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
             LOGGER.info("[DockyardUpgradeTab] Открыт апгрейд Dockyard.");
             LOGGER.info("[DockyardUpgradeTab] Экземпляр экрана: {}", screen.getClass().getName());
             LOGGER.info("[DockyardUpgradeTab] Экземпляр контейнера: {}", getContainer().getClass().getName());
-            DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
-            LOGGER.info("[DockyardUpgradeTab] Wrapper: {}, StorageWrapper: {}", wrapper, wrapper != null ? wrapper.getStorageWrapper().getClass().getName() : "null");
-            if (wrapper != null) {
-                try {
-                    Level level = Minecraft.getInstance().level;
-                    BlockPos blockPos = getBlockPosForBlockEntity();
-                    BlockEntity be = (blockPos != null && level != null) ? wrapper.getStorageBlockEntity(level, blockPos) : null;
-                    LOGGER.info("[DockyardUpgradeTab] getStorageBlockEntity(): {}", be != null ? be.getClass().getName() : "null");
-                } catch (Exception e) {
-                    LOGGER.info("[DockyardUpgradeTab] getStorageBlockEntity() exception: {}", e.toString());
-                }
-            }
         }
 
         if (!isOpen) {

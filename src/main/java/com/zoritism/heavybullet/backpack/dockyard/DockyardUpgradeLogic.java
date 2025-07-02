@@ -32,6 +32,10 @@ public class DockyardUpgradeLogic {
     /**
      * Основная точка входа для засовывания/выпуска корабля.
      * Проверка: рюкзак открыт как блок (block entity) или как предмет (capability игрока).
+     *
+     * Исправлено: distinction между блоком и предметом делается как в SophisticatedBackpacks:
+     * 1. Если контейнер поддерживает getDockyardBlockPos (метод getDockyardBlockPos()), тогда блок;
+     * 2. Иначе — capability игрока.
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
         DockyardUpgradeWrapper wrapper = null;
@@ -39,7 +43,7 @@ public class DockyardUpgradeLogic {
         Level level = null;
         BlockPos blockPos = null;
 
-        // Получаем UpgradeWrapper из открытого DockyardUpgradeContainer (только из открытого GUI!)
+        // Получаем UpgradeWrapper и DockyardBlockPos из контейнера (если возможно)
         try {
             if (player != null && player.containerMenu != null) {
                 AbstractContainerMenu menu = player.containerMenu;
@@ -48,26 +52,20 @@ public class DockyardUpgradeLogic {
                     Object w = m.invoke(menu);
                     if (w instanceof DockyardUpgradeWrapper wupg) {
                         wrapper = wupg;
-                        // Попробуем получить blockPos и level через player и контейнер
                         level = player.level();
-                        // SophisticatedBackpacks всегда открывает апгрейд-контейнер для блока с корректным blockPos, если это блок,
-                        // а не предмет. Нам нужно получить BlockEntity через blockPos и level.
-                        // В DockyardUpgradeWrapper нет прямого доступа к blockPos, поэтому определяем его по апгрейду блока:
-                        // - если апгрейд открыт для блока, в апгрейде в tick всегда передаются level и blockPos.
-                        // - тут мы находим текущий BlockPos по slot/контексту контейнера, но fallback - по позиции игрока.
-                        // К сожалению, без доработки контейнера сложно получить точный blockPos блока, поэтому fallback:
-                        blockPos = player.blockPosition(); // fallback, переопределяется ниже если удастся
-                        // Если меню умеет возвращать blockPos, используем его:
+
+                        // Новый подход: distinction через getDockyardBlockPos (как в SB distinction через storageWrapper)
+                        BlockPos posFromContainer = null;
                         try {
-                            java.lang.reflect.Method m2 = menu.getClass().getMethod("getBlockEntity");
-                            Object be = m2.invoke(menu);
-                            if (be instanceof BlockEntity) {
-                                blockEntity = (BlockEntity) be;
-                                blockPos = blockEntity.getBlockPos();
-                                level = blockEntity.getLevel();
+                            java.lang.reflect.Method mBlockPos = menu.getClass().getMethod("getDockyardBlockPos");
+                            Object posObj = mBlockPos.invoke(menu);
+                            if (posObj instanceof BlockPos bp && level != null) {
+                                posFromContainer = bp;
+                                blockEntity = level.getBlockEntity(bp);
                             }
                         } catch (Exception ignore) {}
-                        // Если не получилось - пробуем через стандартный способ:
+
+                        blockPos = posFromContainer;
                         if (blockEntity == null && level != null && blockPos != null) {
                             blockEntity = level.getBlockEntity(blockPos);
                         }
@@ -81,8 +79,7 @@ public class DockyardUpgradeLogic {
         }
 
         // Проверка: открыт как блок или как предмет?
-        final boolean isOpenedAsBlock = blockEntity != null && blockEntity.getLevel() != null;
-        final BlockPos finalBlockPos = isOpenedAsBlock ? blockEntity.getBlockPos() : null;
+        final boolean isOpenedAsBlock = blockEntity != null && blockPos != null && blockEntity.getLevel() != null;
 
         // Логирование результата проверки
         if (isOpenedAsBlock) {
@@ -118,7 +115,7 @@ public class DockyardUpgradeLogic {
 
             // Для blockentity ищем корабль строго над блоком, не рейтрейсом от игрока!
             ServerLevel serverLevel = player.serverLevel();
-            BlockPos pos = finalBlockPos;
+            BlockPos pos = blockPos;
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
 
             if (ship != null) {
