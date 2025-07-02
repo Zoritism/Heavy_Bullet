@@ -68,56 +68,86 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
     /**
      * Логировать все блок-рюкзаки с DockyardUpgrade в радиусе 10 блоков вокруг игрока (координаты + WrapperID).
+     * Пробует getUpgrades и getAllUpgrades.
      */
     private void logNearbyBackpackBlocksWithDockyardUpgrade(Player player) {
         Level level = player.level();
         BlockPos playerPos = player.blockPosition();
         int radius = 10;
         LOGGER.info("[DockyardUpgradeContainer] Ближайшие блок-рюкзаки с DockyardUpgrade в радиусе {} вокруг {}:", radius, player.getName().getString());
+        boolean foundAny = false;
         for (BlockPos pos : BlockPos.betweenClosed(
                 playerPos.offset(-radius, -radius, -radius),
                 playerPos.offset(radius, radius, radius))) {
 
             BlockEntity be = level.getBlockEntity(pos);
             if (be == null) continue;
+
+            LOGGER.debug("[DockyardUpgradeContainer] BE at {}: class={}", pos, be.getClass().getName());
+
             String beClass = be.getClass().getName();
             if (!beClass.contains("sophisticatedbackpacks")) continue;
 
+            List<?> upgrades = null;
+            // Пробуем сначала getUpgrades, потом getAllUpgrades
             try {
-                var getUpgrades = be.getClass().getMethod("getUpgrades");
+                Method getUpgrades = be.getClass().getMethod("getUpgrades");
                 Object upgradesObj = getUpgrades.invoke(be);
-                if (upgradesObj instanceof List<?> upgrades) {
-                    for (Object stackObj : upgrades) {
-                        if (stackObj instanceof ItemStack stack && !stack.isEmpty()) {
-                            if (stack.getItem().getClass().getName().contains("DockyardUpgradeItem")) {
-                                // Для WrapperID создаём временный DockyardUpgradeWrapper
-                                String tempWrapperId = "null";
-                                try {
-                                    var upgradeItem = stack.getItem();
-                                    if (upgradeItem instanceof DockyardUpgradeItem dockyardUpgradeItem) {
-                                        var upgradeType = dockyardUpgradeItem.getType();
-                                        var getStorageWrapper = be.getClass().getMethod("getStorageWrapper");
-                                        Object storageWrapperObj = getStorageWrapper.invoke(be);
-                                        if (storageWrapperObj instanceof net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper storageWrapper) {
-                                            DockyardUpgradeWrapper tempWrapper = upgradeType.create(storageWrapper, stack, __ -> {});
-                                            tempWrapperId = "wrapper" + Integer.toHexString(System.identityHashCode(tempWrapper));
-                                        }
+                if (upgradesObj instanceof List<?>) {
+                    upgrades = (List<?>) upgradesObj;
+                }
+            } catch (NoSuchMethodException e) {
+                try {
+                    Method getAllUpgrades = be.getClass().getMethod("getAllUpgrades");
+                    Object upgradesObj = getAllUpgrades.invoke(be);
+                    if (upgradesObj instanceof List<?>) {
+                        upgrades = (List<?>) upgradesObj;
+                    }
+                } catch (NoSuchMethodException e2) {
+                    LOGGER.warn("[DockyardUpgradeContainer] BE at {}: нет методов getUpgrades или getAllUpgrades: {}, {}", pos, e.toString(), e2.toString());
+                } catch (Exception e2) {
+                    LOGGER.warn("[DockyardUpgradeContainer] BE at {}: ошибка при вызове getAllUpgrades: {}", pos, e2.toString());
+                }
+            } catch (Exception e) {
+                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: ошибка при вызове getUpgrades: {}", pos, e.toString());
+            }
+
+            if (upgrades != null) {
+                for (Object stackObj : upgrades) {
+                    if (stackObj instanceof ItemStack stack && !stack.isEmpty()) {
+                        if (stack.getItem().getClass().getName().contains("DockyardUpgradeItem")) {
+                            // Для WrapperID создаём временный DockyardUpgradeWrapper
+                            String tempWrapperId = "null";
+                            try {
+                                var upgradeItem = stack.getItem();
+                                if (upgradeItem instanceof DockyardUpgradeItem dockyardUpgradeItem) {
+                                    var upgradeType = dockyardUpgradeItem.getType();
+                                    var getStorageWrapper = be.getClass().getMethod("getStorageWrapper");
+                                    Object storageWrapperObj = getStorageWrapper.invoke(be);
+                                    if (storageWrapperObj instanceof net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper storageWrapper) {
+                                        DockyardUpgradeWrapper tempWrapper = upgradeType.create(storageWrapper, stack, __ -> {});
+                                        tempWrapperId = "wrapper" + Integer.toHexString(System.identityHashCode(tempWrapper));
                                     }
-                                } catch (Exception e) {
-                                    // ignore
                                 }
-                                LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK: Pos={}, WrapperID={}", be.getBlockPos(), tempWrapperId);
-                                break;
+                            } catch (Exception e) {
+                                // ignore
                             }
+                            LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK: Pos={}, WrapperID={}", be.getBlockPos(), tempWrapperId);
+                            foundAny = true;
+                            break;
                         }
                     }
                 }
-            } catch (Exception ignored) {}
+            }
+        }
+        if (!foundAny) {
+            LOGGER.info("[DockyardUpgradeContainer] Нет найденных блок-рюкзаков с DockyardUpgrade в радиусе 10 вокруг игрока.");
         }
     }
 
     /**
      * Сканирует все чанки и выводит координаты всех блок-рюкзаков с DockyardUpgrade, а также их WrapperID
+     * Пробует getUpgrades и getAllUpgrades.
      */
     private void logAllBlockBackpacksWithDockyardUpgrade(Level level) {
         LOGGER.info("[DockyardUpgradeContainer] Все BLOCK BACKPACK с DockyardUpgrade:");
@@ -198,37 +228,58 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                             BlockEntity be = entry.getValue();
                             if (be == null || be.isRemoved()) continue;
                             if (!be.getClass().getName().contains("sophisticatedbackpacks")) continue;
+
+                            List<?> upgrades = null;
+                            // Пробуем сначала getUpgrades, потом getAllUpgrades
                             try {
-                                var getUpgrades = be.getClass().getMethod("getUpgrades");
+                                Method getUpgrades = be.getClass().getMethod("getUpgrades");
                                 Object upgradesObj = getUpgrades.invoke(be);
-                                if (upgradesObj instanceof List<?> upgrades) {
-                                    for (Object stackObj : upgrades) {
-                                        if (stackObj instanceof ItemStack stack && !stack.isEmpty()) {
-                                            if (stack.getItem().getClass().getName().contains("DockyardUpgradeItem")) {
-                                                // Для WrapperID создаём временный DockyardUpgradeWrapper
-                                                String tempWrapperId = "null";
-                                                try {
-                                                    var upgradeItem = stack.getItem();
-                                                    if (upgradeItem instanceof DockyardUpgradeItem dockyardUpgradeItem) {
-                                                        var upgradeType = dockyardUpgradeItem.getType();
-                                                        var getStorageWrapper = be.getClass().getMethod("getStorageWrapper");
-                                                        Object storageWrapperObj = getStorageWrapper.invoke(be);
-                                                        if (storageWrapperObj instanceof net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper storageWrapper) {
-                                                            DockyardUpgradeWrapper tempWrapper = upgradeType.create(storageWrapper, stack, __ -> {});
-                                                            tempWrapperId = "wrapper" + Integer.toHexString(System.identityHashCode(tempWrapper));
-                                                        }
+                                if (upgradesObj instanceof List<?>) {
+                                    upgrades = (List<?>) upgradesObj;
+                                }
+                            } catch (NoSuchMethodException e) {
+                                try {
+                                    Method getAllUpgrades = be.getClass().getMethod("getAllUpgrades");
+                                    Object upgradesObj = getAllUpgrades.invoke(be);
+                                    if (upgradesObj instanceof List<?>) {
+                                        upgrades = (List<?>) upgradesObj;
+                                    }
+                                } catch (NoSuchMethodException e2) {
+                                    LOGGER.warn("[DockyardUpgradeContainer] BE at {}: нет методов getUpgrades или getAllUpgrades: {}, {}", entry.getKey(), e.toString(), e2.toString());
+                                } catch (Exception e2) {
+                                    LOGGER.warn("[DockyardUpgradeContainer] BE at {}: ошибка при вызове getAllUpgrades: {}", entry.getKey(), e2.toString());
+                                }
+                            } catch (Exception e) {
+                                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: ошибка при вызове getUpgrades: {}", entry.getKey(), e.toString());
+                            }
+
+                            if (upgrades != null) {
+                                for (Object stackObj : upgrades) {
+                                    if (stackObj instanceof ItemStack stack && !stack.isEmpty()) {
+                                        if (stack.getItem().getClass().getName().contains("DockyardUpgradeItem")) {
+                                            // Для WrapperID создаём временный DockyardUpgradeWrapper
+                                            String tempWrapperId = "null";
+                                            try {
+                                                var upgradeItem = stack.getItem();
+                                                if (upgradeItem instanceof DockyardUpgradeItem dockyardUpgradeItem) {
+                                                    var upgradeType = dockyardUpgradeItem.getType();
+                                                    var getStorageWrapper = be.getClass().getMethod("getStorageWrapper");
+                                                    Object storageWrapperObj = getStorageWrapper.invoke(be);
+                                                    if (storageWrapperObj instanceof net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper storageWrapper) {
+                                                        DockyardUpgradeWrapper tempWrapper = upgradeType.create(storageWrapper, stack, __ -> {});
+                                                        tempWrapperId = "wrapper" + Integer.toHexString(System.identityHashCode(tempWrapper));
                                                     }
-                                                } catch (Exception e) {
-                                                    // ignore
                                                 }
-                                                LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: BlockPos={} WrapperID={}", be.getBlockPos(), tempWrapperId);
-                                                found++;
-                                                break;
+                                            } catch (Exception e) {
+                                                // ignore
                                             }
+                                            LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: BlockPos={} WrapperID={}", be.getBlockPos(), tempWrapperId);
+                                            found++;
+                                            break;
                                         }
                                     }
                                 }
-                            } catch (Exception ignored) {}
+                            }
                         }
                     } catch (Exception ignored) {}
                 }
