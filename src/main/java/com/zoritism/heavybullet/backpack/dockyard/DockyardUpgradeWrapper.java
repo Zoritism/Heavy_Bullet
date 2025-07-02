@@ -28,6 +28,20 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
+
+        // Логирование для отладки: что приходит в storageWrapper и getBlockEntity
+        System.out.println("[DockyardUpgradeWrapper] storageWrapper class = " + (storageWrapper != null ? storageWrapper.getClass().getName() : "null"));
+        if (storageWrapper != null) {
+            try {
+                Method m = storageWrapper.getClass().getMethod("getBlockEntity");
+                Object be = m.invoke(storageWrapper);
+                System.out.println("[DockyardUpgradeWrapper] getBlockEntity() = " + (be != null ? be.getClass().getName() : "null"));
+            } catch (NoSuchMethodException e) {
+                System.out.println("[DockyardUpgradeWrapper] getBlockEntity() method not found");
+            } catch (Exception e) {
+                System.out.println("[DockyardUpgradeWrapper] getBlockEntity() exception: " + e);
+            }
+        }
     }
 
     public IStorageWrapper getStorageWrapper() {

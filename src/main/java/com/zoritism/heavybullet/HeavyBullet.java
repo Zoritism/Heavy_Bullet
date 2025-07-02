@@ -43,6 +43,8 @@ public class HeavyBullet {
         if (!event.getRegistryKey().equals(ForgeRegistries.Keys.MENU_TYPES)) {
             return;
         }
+        // Критически важно: регистрация апгрейда через UpgradeContainerRegistry,
+        // чтобы SophisticatedBackpacks мог корректно передавать storageWrapper блока
         UpgradeContainerRegistry.register(ModItems.DOCKYARD_UPGRADE.getId(), DOCKYARD_TYPE);
 
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
