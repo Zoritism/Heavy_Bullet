@@ -31,17 +31,19 @@ public class DockyardUpgradeLogic {
     }
 
     /**
-     * distinction (item/block) реализован через storageWrapper.getBlockEntity(Level).
+     * distinction block/item реализован через BlockEntity, определяемый через BlockPos в контейнере.
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
         Level level = null;
 
-        // Получаем UpgradeWrapper из открытого DockyardUpgradeContainer (только из открытого GUI!)
+        BlockPos blockPos = null;
+
         try {
             if (player != null && player.containerMenu != null) {
                 AbstractContainerMenu menu = player.containerMenu;
+                // Получаем UpgradeWrapper
                 try {
                     Method m = menu.getClass().getMethod("getUpgradeWrapper");
                     Object w = m.invoke(menu);
@@ -49,19 +51,33 @@ public class DockyardUpgradeLogic {
                         wrapper = wupg;
                         level = player.level();
 
-                        // distinction через storageWrapper.getBlockEntity(Level)
-                        if (wrapper.getStorageWrapper() != null) {
-                            try {
-                                Method getBlockEntity = wrapper.getStorageWrapper().getClass().getMethod("getBlockEntity", Level.class);
-                                Object be = getBlockEntity.invoke(wrapper.getStorageWrapper(), level);
-                                if (be instanceof BlockEntity) {
-                                    blockEntity = (BlockEntity) be;
+                        // Попробуем получить BlockPos блока через upgradeContainer, если контейнер открыт для блока
+                        try {
+                            Method getUpgradeContainer = menu.getClass().getMethod("getUpgradeContainer");
+                            Object upgradeContainerObj = getUpgradeContainer.invoke(menu);
+                            if (upgradeContainerObj != null) {
+                                // Попробуем получить BlockPos, если есть метод getOpenedBlockPos
+                                try {
+                                    Method getOpenedBlockPos = upgradeContainerObj.getClass().getMethod("getOpenedBlockPos");
+                                    Object blockPosObj = getOpenedBlockPos.invoke(upgradeContainerObj);
+                                    if (blockPosObj instanceof BlockPos pos) {
+                                        blockPos = pos;
+                                    }
+                                } catch (NoSuchMethodException ignored2) {
+                                    // ignore
+                                } catch (Exception ignored2) {
+                                    // ignore
                                 }
-                            } catch (NoSuchMethodException e) {
-                                // Если метода нет — это предмет
-                            } catch (Exception e) {
-                                // ignore
                             }
+                        } catch (NoSuchMethodException ignored1) {
+                            // ignore
+                        } catch (Exception ignored1) {
+                            // ignore
+                        }
+
+                        // Если есть blockPos, получаем blockEntity
+                        if (blockPos != null && level != null) {
+                            blockEntity = level.getBlockEntity(blockPos);
                         }
                     }
                 } catch (Exception e) {
@@ -74,15 +90,15 @@ public class DockyardUpgradeLogic {
 
         final boolean isOpenedAsBlock = blockEntity != null;
 
-        // ----------- ЯВНОЕ логирование distinction -----------
+        // ----------- logging distinction -----------
         if (isOpenedAsBlock) {
             LOGGER.info("[DockyardUpgradeLogic] Mode: BLOCK at {}", blockEntity.getBlockPos());
         } else {
             LOGGER.info("[DockyardUpgradeLogic] Mode: ITEM");
         }
-        // -----------------------------------------------------
+        // --------------------------------------------
 
-        // ================= BLOCKENTITY LOGIC =================
+        // =============== BLOCKENTITY LOGIC ===============
         if (isOpenedAsBlock) {
             // Выпустить корабль из блока
             if (release) {
@@ -130,7 +146,7 @@ public class DockyardUpgradeLogic {
             return;
         }
 
-        // ================= PLAYER CAPABILITY LOGIC =================
+        // =============== PLAYER CAPABILITY LOGIC ===============
         // Если не blockEntity — всегда работаем с capability игрока (рюкзак из инвентаря)
         if (player != null) {
             PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
