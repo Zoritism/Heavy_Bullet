@@ -74,19 +74,47 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
         int found = 0;
         if (level instanceof ServerLevel serverLevel) {
             try {
-                // Достаём chunkMap через ServerLevel::chunkSource (поле), далее через chunkMap (поле)
-                Object chunkMap = null;
+                Object chunkSource = null;
+                // 1. Попробовать нормальное имя поля
                 try {
                     Field chunkSourceField = ServerLevel.class.getDeclaredField("chunkSource");
                     chunkSourceField.setAccessible(true);
-                    Object chunkSource = chunkSourceField.get(serverLevel);
+                    chunkSource = chunkSourceField.get(serverLevel);
+                } catch (NoSuchFieldException e) {
+                    // 2. Fallback для obfuscated builds: найти первое поле типа ServerChunkCache
+                    for (Field field : ServerLevel.class.getDeclaredFields()) {
+                        if (field.getType().getSimpleName().equals("ServerChunkCache")) {
+                            field.setAccessible(true);
+                            chunkSource = field.get(serverLevel);
+                            break;
+                        }
+                    }
+                }
+                if (chunkSource == null) {
+                    LOGGER.error("Не удалось найти поле chunkSource в ServerLevel");
+                    return;
+                }
+
+                Object chunkMap = null;
+                // 1. Попробовать нормальное имя поля
+                try {
                     Field chunkMapField = chunkSource.getClass().getDeclaredField("chunkMap");
                     chunkMapField.setAccessible(true);
                     chunkMap = chunkMapField.get(chunkSource);
-                } catch (Exception e) {
-                    LOGGER.error("Не удалось достать chunkMap: ", e);
+                } catch (NoSuchFieldException e) {
+                    // 2. Fallback: ищем поле с Iterable в имени (обфускация)
+                    for (Field field : chunkSource.getClass().getDeclaredFields()) {
+                        if (field.getType().getSimpleName().toLowerCase().contains("chunkmap")) {
+                            field.setAccessible(true);
+                            chunkMap = field.get(chunkSource);
+                            break;
+                        }
+                    }
                 }
-                if (chunkMap == null) return;
+                if (chunkMap == null) {
+                    LOGGER.error("Не удалось найти поле chunkMap в ServerChunkCache");
+                    return;
+                }
 
                 // Получаем getChunkHolders() - Iterable
                 Method getChunkHolders = chunkMap.getClass().getMethod("getChunkHolders");
