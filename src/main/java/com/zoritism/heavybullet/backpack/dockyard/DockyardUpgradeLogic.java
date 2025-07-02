@@ -13,6 +13,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
@@ -21,6 +23,9 @@ import java.util.Map;
 import java.util.UUID;
 
 public class DockyardUpgradeLogic {
+
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
+    private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
 
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
         handleDockyardShipClick(player, 0, release, false, 0L);
@@ -83,6 +88,10 @@ public class DockyardUpgradeLogic {
                 }
                 // --- ЗАПУСК АНИМАЦИИ ЗАСОВЫВАНИЯ КОРАБЛЯ ---
                 DockyardUpgradeWrapper.startInsertShipProcess(blockEntity, slotIndex, ship.getId());
+
+                LOGGER.info("[DockyardUpgradeLogic] process_started");
+                LOGGER.info("[DockyardUpgradeLogic] seconds_left: {}", ANIMATION_TICKS / 20);
+
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.process_started"), true);
             } else {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_found"), true);
