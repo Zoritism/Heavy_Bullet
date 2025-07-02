@@ -84,30 +84,36 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
             CompoundTag beTag = be.saveWithFullMetadata();
             LOGGER.debug("[DockyardUpgradeContainer] NBT for {}: {}", pos, beTag);
 
-            boolean found = false;
-            // Сначала ищем в "Upgrades"
-            found = checkUpgradeList(beTag, "Upgrades", be.getBlockPos());
-            // Fallback: ищем в "upgrades" (на всякий случай)
-            if (!found) {
-                found = checkUpgradeList(beTag, "upgrades", be.getBlockPos());
-            }
-            if (found) foundAny = true;
-            else
+            boolean hasUpgrade = checkBackpackNBTForDockyardUpgrade(beTag, be.getBlockPos());
+            if (hasUpgrade) {
+                foundAny = true;
+            } else {
                 LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK at {}: DockyardUpgrade не найден (NBT: {})", be.getBlockPos(), beTag);
+            }
         }
         if (!foundAny) {
             LOGGER.info("[DockyardUpgradeContainer] Нет найденных блок-рюкзаков с DockyardUpgrade в радиусе 10 вокруг игрока.");
         }
     }
 
-    private boolean checkUpgradeList(CompoundTag beTag, String upgradesKey, BlockPos pos) {
-        if (beTag.contains(upgradesKey, 9)) { // 9 = ListTag
-            ListTag upgrades = beTag.getList(upgradesKey, 10); // 10 = CompoundTag
-            for (int i = 0; i < upgrades.size(); i++) {
-                CompoundTag upgTag = upgrades.getCompound(i);
-                if (upgTag.contains("id") && upgTag.getString("id").equals("heavybullet:dockyard_upgrade")) {
-                    LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK: Pos={}, WrapperID={}", pos, "NBT");
-                    return true;
+    private boolean checkBackpackNBTForDockyardUpgrade(CompoundTag beTag, BlockPos pos) {
+        // SophisticatedBackpacks: апгрейды лежат в backpackData.tag.renderInfo.upgradeItems
+        if (beTag.contains("backpackData", 10)) { // 10 = CompoundTag
+            CompoundTag backpackData = beTag.getCompound("backpackData");
+            if (backpackData.contains("tag", 10)) {
+                CompoundTag tag = backpackData.getCompound("tag");
+                if (tag.contains("renderInfo", 10)) {
+                    CompoundTag renderInfo = tag.getCompound("renderInfo");
+                    if (renderInfo.contains("upgradeItems", 9)) { // 9 = ListTag
+                        ListTag upgradeItems = renderInfo.getList("upgradeItems", 10); // 10 = CompoundTag
+                        for (int i = 0; i < upgradeItems.size(); i++) {
+                            CompoundTag upgTag = upgradeItems.getCompound(i);
+                            if (upgTag.contains("id") && upgTag.getString("id").equals("heavybullet:dockyard_upgrade")) {
+                                LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK: Pos={}, WrapperID={}", pos, "NBT");
+                                return true;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -193,12 +199,12 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                             CompoundTag beTag = be.saveWithFullMetadata();
                             LOGGER.debug("[DockyardUpgradeContainer] NBT for {}: {}", entry.getKey(), beTag);
 
-                            boolean hasUpgrade = false;
-                            hasUpgrade = checkUpgradeList(beTag, "Upgrades", be.getBlockPos());
-                            if (!hasUpgrade) hasUpgrade = checkUpgradeList(beTag, "upgrades", be.getBlockPos());
-                            if (hasUpgrade) found++;
-                            else
+                            boolean hasUpgrade = checkBackpackNBTForDockyardUpgrade(beTag, be.getBlockPos());
+                            if (hasUpgrade) {
+                                found++;
+                            } else {
                                 LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK at {}: DockyardUpgrade не найден (NBT: {})", be.getBlockPos(), beTag);
+                            }
                         }
                     } catch (Exception ignored) {}
                 }
