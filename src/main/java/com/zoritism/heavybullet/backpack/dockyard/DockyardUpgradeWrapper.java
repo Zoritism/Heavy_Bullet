@@ -112,6 +112,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, blockPos, SHIP_RAY_DIST);
                 boolean shipValid = ship != null && ship.getId() == shipId;
                 if (!shipValid) {
+                    LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Ship not found or ID mismatch at process end. Aborting insert for slot {}", slot);
                     clearProcess(tag, be);
                     return;
                 }
@@ -128,27 +129,68 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                     }
 
                     boolean result = false;
+                    String failReason = null;
+
                     if (player != null) {
-                        // Сохраняем в capability игрока
-                        result = VModSchematicJavaHelper.tryStoreShipToPlayerDockyard(
-                                serverLevel,
-                                player,
-                                UUID.randomUUID(),
-                                ship,
-                                shipNbt,
-                                slot
-                        );
-                        if (result) {
-                            LOGIC_LOGGER.info("[DockyardUpgradeLogic] Ship stored to player {} slot {}", player.getGameProfile().getName(), slot);
-                        } else {
-                            LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Failed to save ship to player {} slot {}", player.getGameProfile().getName(), slot);
+                        try {
+                            result = VModSchematicJavaHelper.tryStoreShipToPlayerDockyard(
+                                    serverLevel,
+                                    player,
+                                    UUID.randomUUID(),
+                                    ship,
+                                    shipNbt,
+                                    slot
+                            );
+                            if (result) {
+                                LOGIC_LOGGER.info("[DockyardUpgradeLogic] Ship stored to player {} slot {}", player.getGameProfile().getName(), slot);
+                            } else {
+                                // Анализируем причину (слот занят? далеко? сохранить не удалось?)
+                                String key = "ship" + slot;
+                                if (player.getCapability(PlayerDockyardDataProvider.DOCKYARD_CAP).map(cap -> cap.getDockyardData().contains(key)).orElse(false)) {
+                                    failReason = "slot already occupied";
+                                } else {
+                                    // Проверим расстояние до игрока и корабля
+                                    try {
+                                        Object shipObj = ship.getServerShip();
+                                        Object aabb = shipObj.getClass().getMethod("getWorldAABB").invoke(shipObj);
+                                        if (aabb != null) {
+                                            double minX = (double) aabb.getClass().getMethod("minX").invoke(aabb);
+                                            double maxX = (double) aabb.getClass().getMethod("maxX").invoke(aabb);
+                                            double minY = (double) aabb.getClass().getMethod("minY").invoke(aabb);
+                                            double maxY = (double) aabb.getClass().getMethod("maxY").invoke(aabb);
+                                            double minZ = (double) aabb.getClass().getMethod("minZ").invoke(aabb);
+                                            double maxZ = (double) aabb.getClass().getMethod("maxZ").invoke(aabb);
+                                            double px = player.getX();
+                                            double py = player.getEyeY();
+                                            double pz = player.getZ();
+                                            double dx = Math.max(Math.max(minX - px, 0.0), px - maxX);
+                                            double dy = Math.max(Math.max(minY - py, 0.0), py - maxY);
+                                            double dz = Math.max(Math.max(minZ - pz, 0.0), pz - maxZ);
+                                            double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                                            if (dist > 4.0) {
+                                                failReason = "player too far from ship (" + dist + " > 4.0)";
+                                            }
+                                        }
+                                    } catch (Exception ignored) {}
+                                }
+                                if (failReason == null) {
+                                    failReason = "unknown reason (see tryStoreShipToPlayerDockyard)";
+                                }
+                                LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Failed to save ship to player {} slot {}: {}", player.getGameProfile().getName(), slot, failReason);
+                            }
+                        } catch (Exception e) {
+                            LOGIC_LOGGER.error("[DockyardUpgradeLogic] Exception during tryStoreShipToPlayerDockyard: {}", e.getMessage(), e);
                         }
                     } else {
                         LOGIC_LOGGER.warn("[DockyardUpgradeLogic] No player UUID found or player offline, ship NOT stored");
                     }
 
-                    // В любом случае удаляем корабль из мира (чтобы не дюпать)
-                    DockyardUpgradeLogic.removeShipFromWorldPublic(ship, serverLevel);
+                    // Безопасная логика: только если result==true, удаляем корабль!
+                    if (result) {
+                        DockyardUpgradeLogic.removeShipFromWorldPublic(ship, serverLevel);
+                    } else {
+                        LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Ship was NOT removed from world due to failed save.");
+                    }
 
                     clearProcess(tag, be);
                 }
