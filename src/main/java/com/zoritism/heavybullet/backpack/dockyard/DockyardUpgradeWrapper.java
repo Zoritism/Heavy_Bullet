@@ -80,6 +80,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return cachedBlockEntity;
     }
 
+    /** Получить snapshot всех BLOCK MODE DockyardUpgradeWrapper для логирования */
+    public static Set<DockyardUpgradeWrapper> getAllBlockModeWrappers() {
+        // Возвращаем копию для избежания ConcurrentModificationException
+        return Collections.unmodifiableSet(BLOCK_MODE_WRAPPERS);
+    }
+
     public IStorageWrapper getStorageWrapper() {
         return this.storageWrapper;
     }
