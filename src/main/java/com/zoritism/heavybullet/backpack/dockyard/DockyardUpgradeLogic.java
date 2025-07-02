@@ -25,7 +25,8 @@ public class DockyardUpgradeLogic {
     }
 
     /**
-     * Операция только с открытым контейнером SophisticatedBackpacks!
+     * Основная точка входа для засовывания/выпуска корабля.
+     * Проверка: рюкзак открыт как блок (block entity) или как предмет (capability игрока).
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
         DockyardUpgradeWrapper wrapper = null;
@@ -40,6 +41,7 @@ public class DockyardUpgradeLogic {
                     Object w = m.invoke(menu);
                     if (w instanceof DockyardUpgradeWrapper wupg) {
                         wrapper = wupg;
+                        // КЛЮЧЕВАЯ ПРОВЕРКА: открыт рюкзак как блок
                         blockEntity = wrapper.getStorageBlockEntity();
                     }
                 } catch (Exception e) {
@@ -51,17 +53,12 @@ public class DockyardUpgradeLogic {
         }
 
         // Проверка: открыт как блок или как предмет?
-        boolean isOpenedAsBlock = blockEntity != null;
-        BlockPos blockPos = isOpenedAsBlock ? blockEntity.getBlockPos() : null;
-        // Для отладки/логирования можно использовать:
-        // if (isOpenedAsBlock) {
-        //     System.out.println("[HeavyBullet] Dockyard opened as BLOCKENTITY at " + blockPos);
-        // } else {
-        //     System.out.println("[HeavyBullet] Dockyard opened as ITEM (capability)");
-        // }
+        final boolean isOpenedAsBlock = blockEntity != null;
+        final BlockPos blockPos = isOpenedAsBlock ? blockEntity.getBlockPos() : null;
 
-        // ==== BLOCKENTITY LOGIC ====
+        // ================= BLOCKENTITY LOGIC =================
         if (isOpenedAsBlock) {
+            // Выпустить корабль из блока
             if (release) {
                 CompoundTag shipNbt = DockyardDataHelper.getShipFromBlockSlot(blockEntity, slotIndex);
                 if (shipNbt != null) {
@@ -78,15 +75,19 @@ public class DockyardUpgradeLogic {
                 return;
             }
 
+            // В блоке уже есть корабль
             if (DockyardDataHelper.hasShipInBlockSlot(blockEntity, slotIndex)) {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
+
             // Для blockentity ищем корабль строго над блоком, не рейтрейсом от игрока!
             ServerLevel serverLevel = player.serverLevel();
             BlockPos pos = blockPos;
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
+
             if (ship != null) {
+                // Проверка: если уже идёт процесс засовывания в этот слот — не запускать второй раз
                 CompoundTag persistent = getOrCreatePersistentData(blockEntity);
                 boolean isActive = persistent.getBoolean("DockyardProcessActive");
                 int processSlot = persistent.getInt("DockyardProcessSlot");
@@ -94,6 +95,7 @@ public class DockyardUpgradeLogic {
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.process_already_running"), true);
                     return;
                 }
+                // --- ЗАПУСК АНИМАЦИИ ЗАСОВЫВАНИЯ КОРАБЛЯ ---
                 DockyardUpgradeWrapper.startInsertShipProcess(blockEntity, slotIndex, ship.getId());
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.process_started"), true);
             } else {
@@ -102,8 +104,8 @@ public class DockyardUpgradeLogic {
             return;
         }
 
-        // ==== PLAYER GLOBAL LOGIC ====
-        // Если нет blockEntity, всегда работаем с capability игрока!
+        // ================= PLAYER CAPABILITY LOGIC =================
+        // Если не blockEntity — всегда работаем с capability игрока (рюкзак из инвентаря)
         if (player != null) {
             PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
             CompoundTag dockyardData = data.getDockyardData();
@@ -222,6 +224,7 @@ public class DockyardUpgradeLogic {
     public static boolean saveShipToNbtPublic(ServerShipHandle ship, CompoundTag nbt, ServerPlayer player) {
         return saveShipToNbt(ship, nbt, player);
     }
+
     public static boolean removeShipFromWorldPublic(ServerShipHandle ship, ServerPlayer player) {
         return removeShipFromWorld(ship, player);
     }
@@ -258,6 +261,7 @@ public class DockyardUpgradeLogic {
 
     @Nullable
     public static ServerShipHandle findShipAboveBlock(ServerLevel level, BlockPos blockPos, double maxDistance) {
+        // Луч идёт строго вверх от позиции блока рюкзака
         Vec3 from = new Vec3(blockPos.getX() + 0.5, blockPos.getY() + 1.2, blockPos.getZ() + 0.5);
         int steps = (int) Math.ceil(maxDistance);
         for (int i = 0; i <= steps; i++) {
@@ -290,6 +294,6 @@ public class DockyardUpgradeLogic {
     }
 
     public static void startBlockShipInsert(ServerLevel level, BlockPos blockPos, int slotIndex) {
-        // placeholder
+        // placeholder - не используется, вся логика перенесена в startInsertShipProcess
     }
 }

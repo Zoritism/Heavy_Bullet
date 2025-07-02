@@ -23,7 +23,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
     private static final String NBT_PROCESS_SHIP_ID = "DockyardProcessShipId";
     private static final String NBT_PROCESS_SLOT = "DockyardProcessSlot";
-    private static final int ANIMATION_TICKS = 200;
+    private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
     private static final int SHIP_RAY_DIST = 15;
 
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
