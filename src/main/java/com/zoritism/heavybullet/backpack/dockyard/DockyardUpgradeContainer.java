@@ -49,6 +49,22 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
             LOGGER.info("[DockyardUpgradeContainer] Открытие рюкзака: режим ITEM (инвентарь).");
         }
 
+        // Логируем список всех BLOCK MODE DockyardUpgradeWrapper с координатами блоков
+        LOGGER.info("[DockyardUpgradeContainer] Все BLOCK MODE DockyardUpgrade:");
+        boolean found = false;
+        for (DockyardUpgradeWrapper w : DockyardUpgradeWrapper.getAllBlockModeWrappers()) {
+            if (w != null) {
+                var be = w.getStorageBlockEntity();
+                if (be != null && !be.isRemoved()) {
+                    found = true;
+                    LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: Wrapper {}, BlockPos={}", w, be.getBlockPos());
+                }
+            }
+        }
+        if (!found) {
+            LOGGER.info("[DockyardUpgradeContainer] Нет ни одного BLOCK MODE DockyardUpgrade!");
+        }
+
         if (!player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
             DockyardUpgradeLogic.syncDockyardToClient(serverPlayer);
         }
