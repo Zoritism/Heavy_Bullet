@@ -80,7 +80,6 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
             LOGGER.debug("[DockyardUpgradeContainer] BE at {}: class={}", pos, be.getClass().getName());
 
-            // Логируем весь NBT для диагностики
             CompoundTag beTag = be.saveWithFullMetadata();
             LOGGER.debug("[DockyardUpgradeContainer] NBT for {}: {}", pos, beTag);
 
@@ -96,6 +95,9 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
         }
     }
 
+    /**
+     * Ищет dockyard_upgrade среди апгрейдов в NBT (в upgradeItems).
+     */
     private boolean checkBackpackNBTForDockyardUpgrade(CompoundTag beTag, BlockPos pos) {
         // SophisticatedBackpacks: апгрейды лежат в backpackData.tag.renderInfo.upgradeItems
         if (beTag.contains("backpackData", 10)) { // 10 = CompoundTag
@@ -108,7 +110,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                         ListTag upgradeItems = renderInfo.getList("upgradeItems", 10); // 10 = CompoundTag
                         for (int i = 0; i < upgradeItems.size(); i++) {
                             CompoundTag upgTag = upgradeItems.getCompound(i);
-                            if (upgTag.contains("id") && upgTag.getString("id").equals("heavybullet:dockyard_upgrade")) {
+                            if (upgTag.contains("id") && upgTag.getString("id").endsWith("dockyard_upgrade")) {
                                 LOGGER.info("[DockyardUpgradeContainer] BLOCK_BACKPACK: Pos={}, WrapperID={}", pos, "NBT");
                                 return true;
                             }
