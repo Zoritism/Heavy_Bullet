@@ -74,11 +74,12 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
         int found = 0;
         if (level instanceof ServerLevel serverLevel) {
             try {
-                // Достаём chunkMap через getChunkSource().chunkMap
+                // Достаём chunkMap через ServerLevel::chunkSource (поле), далее через chunkMap (поле)
                 Object chunkMap = null;
                 try {
-                    Method getChunkSource = ServerLevel.class.getMethod("getChunkSource");
-                    Object chunkSource = getChunkSource.invoke(serverLevel);
+                    Field chunkSourceField = ServerLevel.class.getDeclaredField("chunkSource");
+                    chunkSourceField.setAccessible(true);
+                    Object chunkSource = chunkSourceField.get(serverLevel);
                     Field chunkMapField = chunkSource.getClass().getDeclaredField("chunkMap");
                     chunkMapField.setAccessible(true);
                     chunkMap = chunkMapField.get(chunkSource);

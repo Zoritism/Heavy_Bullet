@@ -86,6 +86,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         ));
     }
 
+    // distinction реализован только через клиентский кэш!
     private boolean hasShipInSlot(int slot) {
         return DockyardClientCache.hasShipInSlot(slot);
     }
