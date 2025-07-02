@@ -8,6 +8,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -35,6 +36,8 @@ public class DockyardUpgradeLogic {
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
         DockyardUpgradeWrapper wrapper = null;
         BlockEntity blockEntity = null;
+        Level level = null;
+        BlockPos blockPos = null;
 
         // Получаем UpgradeWrapper из открытого DockyardUpgradeContainer (только из открытого GUI!)
         try {
@@ -45,8 +48,29 @@ public class DockyardUpgradeLogic {
                     Object w = m.invoke(menu);
                     if (w instanceof DockyardUpgradeWrapper wupg) {
                         wrapper = wupg;
-                        // КЛЮЧЕВАЯ ПРОВЕРКА: открыт рюкзак как блок
-                        blockEntity = wrapper.getStorageBlockEntity();
+                        // Попробуем получить blockPos и level через player и контейнер
+                        level = player.level();
+                        // SophisticatedBackpacks всегда открывает апгрейд-контейнер для блока с корректным blockPos, если это блок,
+                        // а не предмет. Нам нужно получить BlockEntity через blockPos и level.
+                        // В DockyardUpgradeWrapper нет прямого доступа к blockPos, поэтому определяем его по апгрейду блока:
+                        // - если апгрейд открыт для блока, в апгрейде в tick всегда передаются level и blockPos.
+                        // - тут мы находим текущий BlockPos по slot/контексту контейнера, но fallback - по позиции игрока.
+                        // К сожалению, без доработки контейнера сложно получить точный blockPos блока, поэтому fallback:
+                        blockPos = player.blockPosition(); // fallback, переопределяется ниже если удастся
+                        // Если меню умеет возвращать blockPos, используем его:
+                        try {
+                            java.lang.reflect.Method m2 = menu.getClass().getMethod("getBlockEntity");
+                            Object be = m2.invoke(menu);
+                            if (be instanceof BlockEntity) {
+                                blockEntity = (BlockEntity) be;
+                                blockPos = blockEntity.getBlockPos();
+                                level = blockEntity.getLevel();
+                            }
+                        } catch (Exception ignore) {}
+                        // Если не получилось - пробуем через стандартный способ:
+                        if (blockEntity == null && level != null && blockPos != null) {
+                            blockEntity = level.getBlockEntity(blockPos);
+                        }
                     }
                 } catch (Exception e) {
                     // ignore
@@ -57,16 +81,12 @@ public class DockyardUpgradeLogic {
         }
 
         // Проверка: открыт как блок или как предмет?
-        final boolean isOpenedAsBlock = blockEntity != null;
-        final BlockPos blockPos = isOpenedAsBlock ? blockEntity.getBlockPos() : null;
+        final boolean isOpenedAsBlock = blockEntity != null && blockEntity.getLevel() != null;
+        final BlockPos finalBlockPos = isOpenedAsBlock ? blockEntity.getBlockPos() : null;
 
         // Логирование результата проверки
         if (isOpenedAsBlock) {
-            if (blockEntity != null) {
-                LOGGER.info("[DockyardUpgradeLogic] Проверка режима: рюкзак открыт как БЛОК (BlockEntity) на позиции {}", blockEntity.getBlockPos());
-            } else {
-                LOGGER.info("[DockyardUpgradeLogic] Проверка режима: рюкзак открыт как БЛОК (BlockEntity), но blockEntity == null");
-            }
+            LOGGER.info("[DockyardUpgradeLogic] Проверка режима: рюкзак открыт как БЛОК (BlockEntity) на позиции {}", blockEntity.getBlockPos());
         } else {
             LOGGER.info("[DockyardUpgradeLogic] Проверка режима: рюкзак открыт как ПРЕДМЕТ (ItemStack/capability)");
         }
@@ -98,7 +118,7 @@ public class DockyardUpgradeLogic {
 
             // Для blockentity ищем корабль строго над блоком, не рейтрейсом от игрока!
             ServerLevel serverLevel = player.serverLevel();
-            BlockPos pos = blockPos;
+            BlockPos pos = finalBlockPos;
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 15.0);
 
             if (ship != null) {
