@@ -29,19 +29,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
 
-        // Логирование для отладки: что приходит в storageWrapper и getBlockEntity
+        // Логирование для отладки: что приходит в storageWrapper
         System.out.println("[DockyardUpgradeWrapper] storageWrapper class = " + (storageWrapper != null ? storageWrapper.getClass().getName() : "null"));
-        if (storageWrapper != null) {
-            try {
-                Method m = storageWrapper.getClass().getMethod("getBlockEntity");
-                Object be = m.invoke(storageWrapper);
-                System.out.println("[DockyardUpgradeWrapper] getBlockEntity() = " + (be != null ? be.getClass().getName() : "null"));
-            } catch (NoSuchMethodException e) {
-                System.out.println("[DockyardUpgradeWrapper] getBlockEntity() method not found");
-            } catch (Exception e) {
-                System.out.println("[DockyardUpgradeWrapper] getBlockEntity() exception: " + e);
-            }
-        }
     }
 
     public IStorageWrapper getStorageWrapper() {
@@ -74,24 +63,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     /**
      * Получить BlockEntity для блока-рюкзака, если wrapper создан для установленного блока.
-     * Исправлено: теперь всегда возвращает актуальный BlockEntity через storageWrapper.getBlockEntity() если возможно.
+     * ВАЖНО: SophisticatedBackpacks не гарантирует наличие getBlockEntity(), используйте параметры tick вместо этого!
      */
     @Nullable
-    public BlockEntity getStorageBlockEntity() {
-        if (storageWrapper == null) return null;
-        try {
-            // SophisticatedBackpacks: wrapper для блока реализует getBlockEntity()
-            Method m = storageWrapper.getClass().getMethod("getBlockEntity");
-            Object obj = m.invoke(storageWrapper);
-            if (obj instanceof BlockEntity be && !be.isRemoved()) {
-                return be;
-            }
-        } catch (NoSuchMethodException nsme) {
-            // Не поддерживается, значит это точно не блок
-        } catch (Exception e) {
-            // invoke failed
-        }
-        return null;
+    public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
+        if (level == null || pos == null) return null;
+        BlockEntity be = level.getBlockEntity(pos);
+        return (be != null && !be.isRemoved()) ? be : null;
     }
 
     @Override
@@ -103,7 +81,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
         if (level.isClientSide || blockPos == null) return;
 
-        BlockEntity be = getStorageBlockEntity();
+        // Получаем BlockEntity только через параметры tick!
+        BlockEntity be = getStorageBlockEntity(level, blockPos);
         if (be == null) {
             return;
         }
