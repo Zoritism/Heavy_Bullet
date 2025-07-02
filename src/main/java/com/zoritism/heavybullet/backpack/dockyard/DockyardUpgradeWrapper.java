@@ -12,6 +12,8 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.ITickableUpgrade;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeWrapperBase;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
@@ -22,6 +24,7 @@ import java.util.function.Consumer;
 
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
 
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeWrapper");
     private static final String NBT_PROCESS_ACTIVE = "DockyardProcessActive";
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
     private static final String NBT_PROCESS_SHIP_ID = "DockyardProcessShipId";
@@ -144,6 +147,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             if (!shipValid) {
                 clearProcess(tag, be);
                 return;
+            }
+
+            // Логируем каждую секунду
+            if (ticks % 20 == 1 || ticks == 1) {
+                int secondsLeft = Math.max((ANIMATION_TICKS - ticks) / 20, 0);
+                LOGGER.info("[DockyardUpgradeWrapper] seconds_left: {}", secondsLeft);
             }
 
             // Спавним частицы ("огоньки") между кораблём и рюкзаком
