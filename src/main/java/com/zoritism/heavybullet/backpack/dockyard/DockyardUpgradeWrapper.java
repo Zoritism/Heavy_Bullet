@@ -149,10 +149,11 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 return;
             }
 
-            // Логируем каждую секунду
-            if (ticks % 20 == 1 || ticks == 1) {
+            // Лог каждую секунду (каждые 20 тиков)
+            if (ticks == 1 || ticks % 20 == 0) {
                 int secondsLeft = Math.max((ANIMATION_TICKS - ticks) / 20, 0);
-                LOGGER.info("[DockyardUpgradeWrapper] seconds_left: {}", secondsLeft);
+                Logger logicLogger = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
+                logicLogger.info("[DockyardUpgradeLogic] seconds_left: {}", secondsLeft);
             }
 
             // Спавним частицы ("огоньки") между кораблём и рюкзаком
