@@ -2,23 +2,40 @@ package com.zoritism.heavybullet.backpack.dockyard;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.core.BlockPos;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerBase;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerType;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Контейнер для Dockyard апгрейда.
- * Важно: ничего менять здесь не нужно для поддержки distinction блок/предмет,
- * если регистрация UpgradeType и Wrapper реализованы корректно (см. DockyardUpgradeItem).
- * SophisticatedBackpacks автоматически передаст правильный storageWrapper.
+ * Теперь поддерживает distinction блок/предмет на клиенте через sync blockPos.
  */
 public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgradeWrapper, DockyardUpgradeContainer> {
-    public DockyardUpgradeContainer(Player player, int upgradeContainerId, DockyardUpgradeWrapper upgradeWrapper, UpgradeContainerType<DockyardUpgradeWrapper, DockyardUpgradeContainer> type) {
+    // Синхронизированная позиция блока рюкзака (если открыт как блок, иначе null)
+    private final BlockPos dockyardBlockPos;
+
+    public DockyardUpgradeContainer(Player player, int upgradeContainerId, DockyardUpgradeWrapper upgradeWrapper, UpgradeContainerType<DockyardUpgradeWrapper, DockyardUpgradeContainer> type, BlockPos blockPos) {
         super(player, upgradeContainerId, upgradeWrapper, type);
+        this.dockyardBlockPos = blockPos;
         // ВАЖНО: При открытии контейнера синхронизируем capability с клиентом
         if (!player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
             DockyardUpgradeLogic.syncDockyardToClient(serverPlayer);
         }
+    }
+
+    /**
+     * Старый конструктор для предмета (нет blockPos)
+     */
+    public DockyardUpgradeContainer(Player player, int upgradeContainerId, DockyardUpgradeWrapper upgradeWrapper, UpgradeContainerType<DockyardUpgradeWrapper, DockyardUpgradeContainer> type) {
+        this(player, upgradeContainerId, upgradeWrapper, type, null);
+    }
+
+    /**
+     * @return Позиция блока рюкзака если открыт как блок, иначе null
+     */
+    public BlockPos getDockyardBlockPos() {
+        return dockyardBlockPos;
     }
 
     @Override

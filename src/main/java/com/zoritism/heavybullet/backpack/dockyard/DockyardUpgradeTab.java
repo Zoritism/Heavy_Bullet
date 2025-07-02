@@ -89,25 +89,18 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         ));
     }
 
-    // Получаем BlockPos для поиска BlockEntity — если открыт именно рюкзак-блок, то это позиция блока рюкзака.
-    // В большинстве случаев (если SophisticatedBackpacks всё делает правильно) игрок в GUI рюкзака стоит рядом с этим блоком,
-    // и его blockPosition() совпадает с позицией блока рюкзака. Если не совпадает — можно доработать через контекст контейнера или экран.
+    // Получаем BlockPos для поиска BlockEntity — distinction через контейнер!
     private BlockPos getBlockPosForBlockEntity() {
-        var player = Minecraft.getInstance().player;
-        if (player != null) {
-            return player.blockPosition();
-        }
-        // fallback
-        return BlockPos.ZERO;
+        return getContainer().getDockyardBlockPos();
     }
 
-    // Проверяем, открыт ли блок или capability
+    // distinction: true если открыт рюкзак как блок, иначе false
     private boolean isBlockEntityOpened() {
         DockyardUpgradeWrapper wrapper = getContainer().getUpgradeWrapper();
         if (wrapper == null) return false;
         Level level = Minecraft.getInstance().level;
-        if (level == null) return false;
         BlockPos blockPos = getBlockPosForBlockEntity();
+        if (level == null || blockPos == null) return false;
         BlockEntity be = wrapper.getStorageBlockEntity(level, blockPos);
         return be != null;
     }
@@ -170,7 +163,7 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
                 try {
                     Level level = Minecraft.getInstance().level;
                     BlockPos blockPos = getBlockPosForBlockEntity();
-                    BlockEntity be = wrapper.getStorageBlockEntity(level, blockPos);
+                    BlockEntity be = (blockPos != null && level != null) ? wrapper.getStorageBlockEntity(level, blockPos) : null;
                     LOGGER.info("[DockyardUpgradeTab] getStorageBlockEntity(): {}", be != null ? be.getClass().getName() : "null");
                 } catch (Exception e) {
                     LOGGER.info("[DockyardUpgradeTab] getStorageBlockEntity() exception: {}", e.toString());
