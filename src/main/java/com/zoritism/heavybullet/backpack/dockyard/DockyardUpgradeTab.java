@@ -62,8 +62,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     private static final int BUTTON1_Y = FIELD1_Y + (FIELD_HEIGHT / 2) - 8;
     private static final int BUTTON2_Y = FIELD2_Y + (FIELD_HEIGHT / 2) - 8;
 
-    private boolean didLogOpen = false;
-
     public DockyardUpgradeTab(DockyardUpgradeContainer upgradeContainer, Position position, StorageScreenBase<?> screen) {
         super(upgradeContainer, position, screen,
                 net.minecraft.network.chat.Component.translatable("gui.heavybullet.dockyard.title"),
@@ -101,7 +99,6 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
         } else {
             LOGGER.info("[DockyardUpgradeTab] Нажата кнопка: режим ITEM");
         }
-
         boolean hasShip = hasShipInSlot(slot);
         NetworkHandler.CHANNEL.sendToServer(new C2SHandleDockyardShipPacket(slot, hasShip));
     }
