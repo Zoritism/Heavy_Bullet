@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -12,12 +13,16 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.ITickableUpgrade;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeWrapperBase;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
 import java.util.function.Consumer;
 
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
+
+    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeWrapper");
 
     private static final String NBT_PROCESS_ACTIVE = "DockyardProcessActive";
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
@@ -80,15 +85,15 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     /**
      * distinction между блоком и предметом реализован как в SophisticatedBackpacks:
      * Если entity == null и blockPos != null — мы в block entity (рюкзак в мире);
-     * Если entity != null — мы в руке/инвентаре (рюкзак как предмет).
+     * Если entity instanceof Player — мы в руке/инвентаре (рюкзак как предмет).
      */
     @Override
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
-        // distinction как в SophisticatedBackpacks
         if (level.isClientSide) return;
 
         if (entity == null && blockPos != null) {
             // BLOCK MODE
+            LOGGER.info("[DockyardUpgradeWrapper] distinction: BLOCK MODE, blockPos={}", blockPos);
             BlockEntity be = getStorageBlockEntity(level, blockPos);
             if (be == null) {
                 return;
@@ -124,9 +129,10 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                     clearProcess(tag, be);
                 }
             }
-        } else if (entity != null) {
-            // ITEM MODE — тут distinction нужен только если будет tick логика для предмета
-            // Пока ничего не делаем
+        } else if (entity instanceof Player player) {
+            // ITEM MODE
+            LOGGER.info("[DockyardUpgradeWrapper] distinction: ITEM MODE, player={}", player.getName().getString());
+            // Здесь можно реализовать tick-логику для предмета, если понадобится
         }
     }
 
