@@ -11,6 +11,10 @@ import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerBase;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerType;
 import net.minecraft.server.level.ServerPlayer;
+import com.zoritism.heavybullet.network.NetworkHandler;
+import com.zoritism.heavybullet.network.S2CSyncDockyardClientPacket;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -106,7 +110,21 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
         }
 
         if (!player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
-            DockyardUpgradeLogic.syncDockyardToClient(serverPlayer);
+            // Синхронизация blockMode и blockPos вместе с слотами!
+            Map<Integer, CompoundTag> slots = new HashMap<>();
+            CompoundTag dockyard = currentWrapper != null && player instanceof ServerPlayer sp ?
+                    com.zoritism.heavybullet.backpack.dockyard.PlayerDockyardDataUtil.getOrCreate(sp).getDockyardData()
+                    : new CompoundTag();
+            for (int i = 0; i < 2; ++i) {
+                String key = "ship" + i;
+                if (dockyard.contains(key)) {
+                    slots.put(i, dockyard.getCompound(key).copy());
+                }
+            }
+            NetworkHandler.CHANNEL.send(
+                    net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> serverPlayer),
+                    new S2CSyncDockyardClientPacket(slots, this.blockMode, this.dockyardBlockPos != null ? this.dockyardBlockPos.asLong() : 0L)
+            );
         }
     }
 

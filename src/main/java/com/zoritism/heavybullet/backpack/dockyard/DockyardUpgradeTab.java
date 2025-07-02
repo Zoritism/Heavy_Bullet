@@ -92,8 +92,8 @@ public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContai
     }
 
     private void handleSlotButtonClick(int slot) {
-        DockyardUpgradeContainer container = getContainer();
-        boolean isBlockMode = container != null && container.isBlockMode();
+        // distinction теперь только через DockyardClientCache!
+        boolean isBlockMode = DockyardClientCache.getBlockMode();
         if (isBlockMode) {
             LOGGER.info("[DockyardUpgradeTab] Нажата кнопка: режим BLOCK");
         } else {

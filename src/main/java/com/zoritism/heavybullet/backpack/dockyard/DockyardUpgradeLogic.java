@@ -186,9 +186,27 @@ public class DockyardUpgradeLogic {
                 slots.put(i, dockyard.getCompound(key).copy());
             }
         }
+
+        boolean blockMode = false;
+        long blockPos = 0L;
+
+        if (player.containerMenu != null) {
+            try {
+                java.lang.reflect.Method getUpgradeContainer = player.containerMenu.getClass().getMethod("getUpgradeContainer");
+                Object cont = getUpgradeContainer.invoke(player.containerMenu);
+                if (cont instanceof DockyardUpgradeContainer duc) {
+                    blockMode = duc.isBlockMode();
+                    BlockPos pos = duc.getOpenedBlockPos();
+                    if (blockMode && pos != null) {
+                        blockPos = pos.asLong();
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
         NetworkHandler.CHANNEL.send(
                 PacketDistributor.PLAYER.with(() -> player),
-                new S2CSyncDockyardClientPacket(slots)
+                new S2CSyncDockyardClientPacket(slots, blockMode, blockPos)
         );
     }
 
