@@ -5,13 +5,12 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerBase;
 import net.p3pp3rf1y.sophisticatedcore.common.gui.UpgradeContainerType;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.level.ChunkMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -19,8 +18,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgradeWrapper, DockyardUpgradeContainer> {
 
@@ -70,51 +67,62 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
     }
 
     /**
-     * Сканирует все чанки и выводит координаты всех блок-рюкзаков с DockyardUpgrade
+     * Сканирует все чанки и выводит координаты всех блок-рюкзаков с DockyardUpgrade (совместимо с Forge 1.20.1)
      */
     private void logAllBlockBackpacksWithDockyardUpgrade(Level level) {
         LOGGER.info("[DockyardUpgradeContainer] Все BLOCK BACKPACK с DockyardUpgrade:");
         int found = 0;
         if (level instanceof ServerLevel serverLevel) {
             try {
-                Field chunkMapField = ServerLevel.class.getDeclaredField("chunkSource");
-                chunkMapField.setAccessible(true);
-                Object chunkSource = chunkMapField.get(serverLevel);
+                // Достаём chunkMap через getChunkSource().chunkMap
+                Object chunkMap = null;
+                try {
+                    Method getChunkSource = ServerLevel.class.getMethod("getChunkSource");
+                    Object chunkSource = getChunkSource.invoke(serverLevel);
+                    Field chunkMapField = chunkSource.getClass().getDeclaredField("chunkMap");
+                    chunkMapField.setAccessible(true);
+                    chunkMap = chunkMapField.get(chunkSource);
+                } catch (Exception e) {
+                    LOGGER.error("Не удалось достать chunkMap: ", e);
+                }
+                if (chunkMap == null) return;
 
-                Field chunkMapF = chunkSource.getClass().getDeclaredField("chunkMap");
-                chunkMapF.setAccessible(true);
-                Object chunkMap = chunkMapF.get(chunkSource);
-
-                // getChunks() - protected, используем рефлексию
-                Method getChunksMethod = chunkMap.getClass().getDeclaredMethod("getChunks");
-                getChunksMethod.setAccessible(true);
-                Iterable<?> chunkHolders = (Iterable<?>) getChunksMethod.invoke(chunkMap);
+                // Получаем getChunkHolders() - Iterable
+                Method getChunkHolders = chunkMap.getClass().getMethod("getChunkHolders");
+                Iterable<?> chunkHolders = (Iterable<?>) getChunkHolders.invoke(chunkMap);
 
                 for (Object chunkHolder : chunkHolders) {
-                    // getChunkIfComplete() вернёт LevelChunk если чанк загружен
-                    Method getChunkIfComplete = chunkHolder.getClass().getMethod("getChunkIfComplete");
-                    Object chunkAccess = getChunkIfComplete.invoke(chunkHolder);
-                    if (chunkAccess instanceof LevelChunk chunk) {
-                        for (Map.Entry<BlockPos, BlockEntity> entry : chunk.getBlockEntities().entrySet()) {
-                            BlockEntity be = entry.getValue();
-                            if (be == null || be.isRemoved()) continue;
-                            if (!be.getClass().getName().contains("sophisticatedbackpacks")) continue;
-                            try {
-                                var getUpgrades = be.getClass().getMethod("getUpgrades");
-                                Object upgradesObj = getUpgrades.invoke(be);
-                                if (upgradesObj instanceof List<?> upgrades) {
-                                    for (Object stackObj : upgrades) {
-                                        if (stackObj instanceof ItemStack stack && !stack.isEmpty()) {
-                                            if (stack.getItem().getClass().getName().contains("DockyardUpgradeItem")) {
-                                                LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: BlockPos={}", be.getBlockPos());
-                                                found++;
-                                                break;
-                                            }
+                    // getLastAvailable() возвращает Optional<LevelChunk>
+                    Method getLastAvailable = chunkHolder.getClass().getMethod("getLastAvailable");
+                    Object optionalChunk = getLastAvailable.invoke(chunkHolder);
+                    if (optionalChunk == null) continue;
+                    // Optional<LevelChunk>: get(), isPresent()
+                    Method isPresent = optionalChunk.getClass().getMethod("isPresent");
+                    boolean present = (boolean) isPresent.invoke(optionalChunk);
+                    if (!present) continue;
+                    Method get = optionalChunk.getClass().getMethod("get");
+                    Object chunkObj = get.invoke(optionalChunk);
+                    if (!(chunkObj instanceof LevelChunk chunk)) continue;
+
+                    for (Map.Entry<BlockPos, BlockEntity> entry : chunk.getBlockEntities().entrySet()) {
+                        BlockEntity be = entry.getValue();
+                        if (be == null || be.isRemoved()) continue;
+                        if (!be.getClass().getName().contains("sophisticatedbackpacks")) continue;
+                        try {
+                            var getUpgrades = be.getClass().getMethod("getUpgrades");
+                            Object upgradesObj = getUpgrades.invoke(be);
+                            if (upgradesObj instanceof List<?> upgrades) {
+                                for (Object stackObj : upgrades) {
+                                    if (stackObj instanceof ItemStack stack && !stack.isEmpty()) {
+                                        if (stack.getItem().getClass().getName().contains("DockyardUpgradeItem")) {
+                                            LOGGER.info("[DockyardUpgradeContainer] BLOCK MODE: BlockPos={}", be.getBlockPos());
+                                            found++;
+                                            break;
                                         }
                                     }
                                 }
-                            } catch (Exception ignored) {}
-                        }
+                            }
+                        } catch (Exception ignored) {}
                     }
                 }
             } catch (Exception e) {
