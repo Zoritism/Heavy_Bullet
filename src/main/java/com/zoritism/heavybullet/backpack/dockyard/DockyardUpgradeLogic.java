@@ -31,7 +31,6 @@ public class DockyardUpgradeLogic {
     }
 
     /**
-     * Основная точка входа для засовывания/выпуска корабля.
      * distinction (item/block) реализован через storageWrapper.getBlockEntity(Level).
      */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {

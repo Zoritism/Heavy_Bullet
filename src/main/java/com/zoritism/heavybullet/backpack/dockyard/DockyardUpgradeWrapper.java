@@ -77,45 +77,56 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return false;
     }
 
+    /**
+     * distinction между блоком и предметом реализован как в SophisticatedBackpacks:
+     * Если entity == null и blockPos != null — мы в block entity (рюкзак в мире);
+     * Если entity != null — мы в руке/инвентаре (рюкзак как предмет).
+     */
     @Override
     public void tick(@Nullable Entity entity, Level level, BlockPos blockPos) {
-        if (level.isClientSide || blockPos == null) return;
+        // distinction как в SophisticatedBackpacks
+        if (level.isClientSide) return;
 
-        // Получаем BlockEntity только через параметры tick!
-        BlockEntity be = getStorageBlockEntity(level, blockPos);
-        if (be == null) {
-            return;
-        }
-        CompoundTag tag = getPersistentData(be);
-
-        syncBackpackShipsToBlock(be);
-
-        if (tag.getBoolean(NBT_PROCESS_ACTIVE)) {
-            int ticks = tag.getInt(NBT_PROCESS_TICKS);
-            long shipId = tag.getLong(NBT_PROCESS_SHIP_ID);
-            int slot = tag.getInt(NBT_PROCESS_SLOT);
-
-            ticks++;
-            tag.putInt(NBT_PROCESS_TICKS, ticks);
-
-            ServerLevel serverLevel = (ServerLevel) level;
-            DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, blockPos, SHIP_RAY_DIST);
-            boolean shipValid = ship != null && ship.getId() == shipId;
-            if (!shipValid) {
-                clearProcess(tag, be);
+        if (entity == null && blockPos != null) {
+            // BLOCK MODE
+            BlockEntity be = getStorageBlockEntity(level, blockPos);
+            if (be == null) {
                 return;
             }
-            spawnDockyardParticles(serverLevel, blockPos, ship);
+            CompoundTag tag = getPersistentData(be);
 
-            if (ticks >= ANIMATION_TICKS) {
-                CompoundTag shipNbt = new CompoundTag();
-                boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null);
-                if (result) {
-                    DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
-                    DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
+            syncBackpackShipsToBlock(be);
+
+            if (tag.getBoolean(NBT_PROCESS_ACTIVE)) {
+                int ticks = tag.getInt(NBT_PROCESS_TICKS);
+                long shipId = tag.getLong(NBT_PROCESS_SHIP_ID);
+                int slot = tag.getInt(NBT_PROCESS_SLOT);
+
+                ticks++;
+                tag.putInt(NBT_PROCESS_TICKS, ticks);
+
+                ServerLevel serverLevel = (ServerLevel) level;
+                DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, blockPos, SHIP_RAY_DIST);
+                boolean shipValid = ship != null && ship.getId() == shipId;
+                if (!shipValid) {
+                    clearProcess(tag, be);
+                    return;
                 }
-                clearProcess(tag, be);
+                spawnDockyardParticles(serverLevel, blockPos, ship);
+
+                if (ticks >= ANIMATION_TICKS) {
+                    CompoundTag shipNbt = new CompoundTag();
+                    boolean result = DockyardUpgradeLogic.saveShipToNbtPublic(ship, shipNbt, null);
+                    if (result) {
+                        DockyardDataHelper.saveShipToBlockSlot(be, shipNbt, slot);
+                        DockyardUpgradeLogic.removeShipFromWorldPublic(ship, null);
+                    }
+                    clearProcess(tag, be);
+                }
             }
+        } else if (entity != null) {
+            // ITEM MODE — тут distinction нужен только если будет tick логика для предмета
+            // Пока ничего не делаем
         }
     }
 
