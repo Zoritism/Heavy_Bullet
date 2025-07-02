@@ -68,7 +68,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
     /**
      * Логировать все блок-рюкзаки с DockyardUpgrade в радиусе 10 блоков вокруг игрока (координаты + WrapperID).
-     * Для SophisticatedBackpacks используется getUpgradeHandler().getUpgrades().
+     * Для SophisticatedBackpacks используется поле upgradeHandler (public final), а не метод.
      */
     private void logNearbyBackpackBlocksWithDockyardUpgrade(Player player) {
         Level level = player.level();
@@ -89,10 +89,10 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
             if (!beClass.contains("sophisticatedbackpacks")) continue;
 
             List<?> upgrades = null;
-            // SophisticatedBackpacks: getUpgradeHandler().getUpgrades()
+            // SophisticatedBackpacks: upgradeHandler.getUpgrades()
             try {
-                Method getUpgradeHandler = be.getClass().getMethod("getUpgradeHandler");
-                Object upgradeHandler = getUpgradeHandler.invoke(be);
+                Field upgradeHandlerField = be.getClass().getField("upgradeHandler");
+                Object upgradeHandler = upgradeHandlerField.get(be);
                 if (upgradeHandler != null) {
                     Method getUpgrades = upgradeHandler.getClass().getMethod("getUpgrades");
                     Object upgradesObj = getUpgrades.invoke(upgradeHandler);
@@ -101,7 +101,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                     }
                 }
             } catch (Exception e) {
-                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: не удалось получить апгрейды через getUpgradeHandler/getUpgrades: {}", pos, e.toString());
+                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: не удалось получить апгрейды через поле upgradeHandler/getUpgrades: {}", pos, e.toString());
             }
 
             if (upgrades != null) {
@@ -138,7 +138,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
     /**
      * Сканирует все чанки и выводит координаты всех блок-рюкзаков с DockyardUpgrade, а также их WrapperID
-     * Для SophisticatedBackpacks используется getUpgradeHandler().getUpgrades().
+     * Для SophisticatedBackpacks используется поле upgradeHandler (public final), а не метод.
      */
     private void logAllBlockBackpacksWithDockyardUpgrade(Level level) {
         LOGGER.info("[DockyardUpgradeContainer] Все BLOCK BACKPACK с DockyardUpgrade:");
@@ -222,8 +222,8 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
 
                             List<?> upgrades = null;
                             try {
-                                Method getUpgradeHandler = be.getClass().getMethod("getUpgradeHandler");
-                                Object upgradeHandler = getUpgradeHandler.invoke(be);
+                                Field upgradeHandlerField = be.getClass().getField("upgradeHandler");
+                                Object upgradeHandler = upgradeHandlerField.get(be);
                                 if (upgradeHandler != null) {
                                     Method getUpgrades = upgradeHandler.getClass().getMethod("getUpgrades");
                                     Object upgradesObj = getUpgrades.invoke(upgradeHandler);
@@ -232,7 +232,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                                     }
                                 }
                             } catch (Exception e) {
-                                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: не удалось получить апгрейды через getUpgradeHandler/getUpgrades: {}", entry.getKey(), e.toString());
+                                LOGGER.warn("[DockyardUpgradeContainer] BE at {}: не удалось получить апгрейды через поле upgradeHandler/getUpgrades: {}", entry.getKey(), e.toString());
                             }
 
                             if (upgrades != null) {
