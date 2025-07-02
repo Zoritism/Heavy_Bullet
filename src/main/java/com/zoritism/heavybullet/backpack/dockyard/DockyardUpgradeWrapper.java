@@ -26,8 +26,15 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
     private static final int SHIP_RAY_DIST = 15;
 
+    // Храним ссылку на BlockEntity если создан как блок
+    @Nullable
+    private final BlockEntity blockEntityRef;
+
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
+
+        // Попробуем получить BlockEntity напрямую, если storageWrapper создан для блока
+        this.blockEntityRef = extractBlockEntity(storageWrapper);
     }
 
     public IStorageWrapper getStorageWrapper() {
@@ -58,8 +65,18 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return ItemStack.EMPTY;
     }
 
+    /**
+     * Получить BlockEntity для блока-рюкзака, если wrapper создан для установленного блока.
+     * Исправлено: теперь возвращает корректно и для SophisticatedBackpacks!
+     */
     @Nullable
     public BlockEntity getStorageBlockEntity() {
+        // Если в конструкторе нашли реальный BlockEntity - возвращаем!
+        if (blockEntityRef != null && !blockEntityRef.isRemoved()) {
+            return blockEntityRef;
+        }
+
+        // Иначе старая рефлексия (fallback, но не рекомендуется)
         if (storageWrapper == null) return null;
         try {
             Method m = storageWrapper.getClass().getMethod("getBlockEntity");
@@ -68,6 +85,24 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         } catch (NoSuchMethodException nsme) {
         } catch (Exception e) {
         }
+        return null;
+    }
+
+    /**
+     * Вытаскивает BlockEntity из storageWrapper, если это SophisticatedBackpacks block wrapper.
+     */
+    @Nullable
+    private static BlockEntity extractBlockEntity(IStorageWrapper storageWrapper) {
+        if (storageWrapper == null) return null;
+        // SophisticatedBackpacks: wrapper для блока реализует getBlockEntity()
+        try {
+            Method m = storageWrapper.getClass().getMethod("getBlockEntity");
+            Object obj = m.invoke(storageWrapper);
+            if (obj instanceof BlockEntity be) {
+                return be;
+            }
+        } catch (Throwable ignored) {}
+        // Можно добавить свои типы/adapter здесь при необходимости
         return null;
     }
 
