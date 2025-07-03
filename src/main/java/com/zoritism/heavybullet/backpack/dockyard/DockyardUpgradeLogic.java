@@ -278,49 +278,28 @@ public class DockyardUpgradeLogic {
     }
 
     /**
-     * Выпустить корабль из блока-рюкзака строго над ним,
-     * если вверх на 100 блоков нет препятствий.
+     * Выпустить корабль из блока-рюкзака строго над ним (block mode).
+     * Использует точную координату для спавна!
      */
     private static boolean releaseShipFromBlock(ServerPlayer player, BlockEntity blockEntity, CompoundTag shipNbt) {
         ServerLevel level = player.serverLevel();
         BlockPos blockPos = blockEntity.getBlockPos();
 
-        // 1. Рейтрейс вверх на 100 блоков (от центра блока)
-        int maxUp = 100;
         double x = blockPos.getX() + 0.5;
         double y = blockPos.getY() + 0.5;
         double z = blockPos.getZ() + 0.5;
-        boolean hasObstacle = false;
-        for (int i = 1; i <= maxUp; i++) {
-            BlockPos checkPos = BlockPos.containing(x, y + i, z);
-            // Исправлено: canBeReplaced вместо getMaterial().isReplaceable()
-            if (!level.getBlockState(checkPos).isAir() && !level.getBlockState(checkPos).canBeReplaced()) {
-                hasObstacle = true;
-                break;
-            }
-        }
-        if (hasObstacle) {
-            player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.cannot_release_blocked"), true);
-            return false;
-        }
-        // 2. Узнать высоту корабля (aabb)
         double halfShipHeight = 1.0;
         try {
-            Object vsShip = null;
-            // Получаем размеры корабля из NBT (через findServerShip или из nbt)
-            // Но если корабль ещё не в мире, используем значения из NBT (как есть)
-            // Т.к. тут корабля в мире скорее всего нет - берём высоту по дефолту 2 блока
             if (shipNbt.contains("vs_ship_height")) {
                 halfShipHeight = shipNbt.getDouble("vs_ship_height") / 2.0;
             }
         } catch (Exception ignored) {}
 
-        // 3. Целевая позиция: x, y + 5 + halfShipHeight, z
         Vec3 spawnPos = new Vec3(x, y + 5.0 + halfShipHeight, z);
 
-        // 4. Спавним корабль в этой позиции
         UUID uuid = UUID.randomUUID();
-        boolean result = VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, spawnPos, shipNbt);
+        // ВАЖНО: теперь передаем true для точного позиционирования при спавне из block mode!
+        boolean result = VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, spawnPos, shipNbt, true);
         return result;
     }
 
@@ -330,7 +309,8 @@ public class DockyardUpgradeLogic {
         Vec3 pos = player.position();
 
         try {
-            return VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, pos, nbt);
+            // Для item mode теперь обязательно передавать false в 6-й аргумент
+            return VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, pos, nbt, false);
         } catch (Throwable t) {
             return false;
         }

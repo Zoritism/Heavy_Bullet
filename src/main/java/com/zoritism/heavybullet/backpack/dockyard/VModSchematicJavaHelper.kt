@@ -204,7 +204,8 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Спавн корабля из NBT (с проверкой на коллизии и расстояние)
+     * Спавн корабля из NBT
+     * @param forceExactPos если true — использовать pos без проверок, иначе поведение по взгляду игрока
      * @return true если успешно, иначе false
      */
     @JvmStatic
@@ -213,7 +214,8 @@ object VModSchematicJavaHelper {
         player: ServerPlayer,
         uuid: UUID,
         pos: Vec3,
-        nbt: CompoundTag
+        nbt: CompoundTag,
+        forceExactPos: Boolean = false
     ): Boolean {
         try {
             if (!nbt.contains("vs_ship_id")) {
@@ -258,45 +260,49 @@ object VModSchematicJavaHelper {
             val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
             val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
 
-            val sizeX = maxX - minX
-            val sizeY = maxY - minY
-            val sizeZ = maxZ - minZ
-            val maxSide = max(max(sizeX, sizeY), sizeZ)
-            val spawnDist = (maxSide / 2.0) + 2.0 // половина корабля + 2 блока зазора
+            val spawnPos: Vec3 = if (forceExactPos) {
+                pos
+            } else {
+                val sizeX = maxX - minX
+                val sizeY = maxY - minY
+                val sizeZ = maxZ - minZ
+                val maxSide = max(max(sizeX, sizeY), sizeZ)
+                val spawnDist = (maxSide / 2.0) + 2.0 // половина корабля + 2 блока зазора
 
-            val eyePos = player.eyePosition
-            val lookVec = player.lookAngle.normalize()
-            var targetPos = eyePos.add(lookVec.x * spawnDist, lookVec.y * spawnDist, lookVec.z * spawnDist)
+                val eyePos = player.eyePosition
+                val lookVec = player.lookAngle.normalize()
+                var targetPos = eyePos.add(lookVec.x * spawnDist, lookVec.y * spawnDist, lookVec.z * spawnDist)
 
-            // Ограничение в 500 блоков — если spawnDist больше, то корабль появляется ровно на 500 блоках
-            val maxAllowedDist = 500.0
-            val actualDist = eyePos.distanceTo(targetPos)
-            var finalSpawnDist = spawnDist
-            if (actualDist > maxAllowedDist) {
-                finalSpawnDist = maxAllowedDist
-                targetPos = eyePos.add(lookVec.x * finalSpawnDist, lookVec.y * finalSpawnDist, lookVec.z * finalSpawnDist)
+                // Ограничение в 500 блоков — если spawnDist больше, то корабль появляется ровно на 500 блоках
+                val maxAllowedDist = 500.0
+                val actualDist = eyePos.distanceTo(targetPos)
+                var finalSpawnDist = spawnDist
+                if (actualDist > maxAllowedDist) {
+                    finalSpawnDist = maxAllowedDist
+                    targetPos = eyePos.add(lookVec.x * finalSpawnDist, lookVec.y * finalSpawnDist, lookVec.z * finalSpawnDist)
+                }
+
+                // Проверка на отсутствие препятствий для спавна корабля
+                val context = net.minecraft.world.level.ClipContext(
+                    eyePos, targetPos,
+                    net.minecraft.world.level.ClipContext.Block.OUTLINE,
+                    net.minecraft.world.level.ClipContext.Fluid.NONE,
+                    player
+                )
+                val hit: HitResult = level.clip(context)
+                if (hit.type != HitResult.Type.MISS) {
+                    return false
+                }
+
+                // Новая позиция — финальная, по направлению взгляда на расстоянии finalSpawnDist,
+                // но по вертикали поднята на половину высоты корабля
+                val halfShipHeight = (maxY - minY) / 2.0
+                Vec3(
+                    eyePos.x + lookVec.x * finalSpawnDist,
+                    eyePos.y + lookVec.y * finalSpawnDist + halfShipHeight,
+                    eyePos.z + lookVec.z * finalSpawnDist
+                )
             }
-
-            // Проверка на отсутствие препятствий для спавна корабля
-            val context = net.minecraft.world.level.ClipContext(
-                eyePos, targetPos,
-                net.minecraft.world.level.ClipContext.Block.OUTLINE,
-                net.minecraft.world.level.ClipContext.Fluid.NONE,
-                player
-            )
-            val hit: HitResult = level.clip(context)
-            if (hit.type != HitResult.Type.MISS) {
-                return false
-            }
-
-            // Новая позиция — финальная, по направлению взгляда на расстоянии finalSpawnDist,
-            // но по вертикали поднята на половину высоты корабля
-            val halfShipHeight = (maxY - minY) / 2.0
-            val spawnPos = Vec3(
-                eyePos.x + lookVec.x * finalSpawnDist,
-                eyePos.y + lookVec.y * finalSpawnDist + halfShipHeight,
-                eyePos.z + lookVec.z * finalSpawnDist
-            )
 
             try {
                 val serverShip = ship as org.valkyrienskies.core.api.ships.ServerShip
