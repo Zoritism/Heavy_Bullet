@@ -20,11 +20,18 @@ public class PlayerDockyardDataProvider implements ICapabilitySerializable<Compo
 
     @Override
     public CompoundTag serializeNBT() {
-        return instance.getDockyardData();
+        // Возвращаем копию, чтобы избежать багов с ссылками!
+        return instance.getDockyardData().copy();
     }
 
     @Override
     public void deserializeNBT(CompoundTag nbt) {
-        instance.getDockyardData().merge(nbt);
+        CompoundTag data = instance.getDockyardData();
+        for (String key : data.getAllKeys()) {
+            data.remove(key);
+        }
+        for (String key : nbt.getAllKeys()) {
+            data.put(key, nbt.get(key).copy());
+        }
     }
 }

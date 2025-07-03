@@ -21,24 +21,23 @@ public class PlayerDockyardCapabilityAttacher {
     }
 
     /**
-     * Копирует данные dockyard capability при смерти игрока (сохраняет корабли в доке).
+     * Переносит данные dockyard capability при любом клонировании игрока (смерть, выход и т.д.).
+     * Не инициирует никаких действий по автоспавну!
      */
     @SubscribeEvent
     public static void onPlayerClone(PlayerEvent.Clone event) {
-        if (event.isWasDeath()) {
-            event.getOriginal().getCapability(PlayerDockyardDataProvider.DOCKYARD_CAP).ifPresent(oldCap -> {
-                event.getEntity().getCapability(PlayerDockyardDataProvider.DOCKYARD_CAP).ifPresent(newCap -> {
-                    CompoundTag oldData = oldCap.getDockyardData();
-                    CompoundTag newData = newCap.getDockyardData();
-                    // Очистка и копирование всех ключей
-                    for (String key : newData.getAllKeys()) {
-                        newData.remove(key);
-                    }
-                    for (String key : oldData.getAllKeys()) {
-                        newData.put(key, oldData.get(key).copy());
-                    }
-                });
+        event.getOriginal().getCapability(PlayerDockyardDataProvider.DOCKYARD_CAP).ifPresent(oldCap -> {
+            event.getEntity().getCapability(PlayerDockyardDataProvider.DOCKYARD_CAP).ifPresent(newCap -> {
+                CompoundTag oldData = oldCap.getDockyardData();
+                CompoundTag newData = newCap.getDockyardData();
+                // Очищаем новые данные и копируем всё из старых
+                for (String key : newData.getAllKeys()) {
+                    newData.remove(key);
+                }
+                for (String key : oldData.getAllKeys()) {
+                    newData.put(key, oldData.get(key).copy());
+                }
             });
-        }
+        });
     }
 }
