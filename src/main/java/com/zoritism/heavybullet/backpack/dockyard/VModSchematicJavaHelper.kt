@@ -60,7 +60,7 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Сохранить корабль в persistent data игрока!
+     * Сохранить корабль в capability игрока (глобально, а не в рюкзаке!)
      * @param checkDistance - если true, проверять расстояние до игрока (item mode); если false, не проверять (block mode)
      * @return true если успешно, иначе false
      */
@@ -75,7 +75,7 @@ object VModSchematicJavaHelper {
         checkDistance: Boolean = true
     ): Boolean {
         // Не даём забирать корабль если у игрока уже есть в этом слоте
-        val dockyardData = DockyardPlayerDataUtil.getDockyardData(player)
+        val dockyardData = PlayerDockyardDataUtil.getOrCreate(player).dockyardData
         val key = "ship$slot"
         if (dockyardData.contains(key)) {
             return false
@@ -107,17 +107,15 @@ object VModSchematicJavaHelper {
         val saveResult = saveShipToNBT(level, player, uuid, ship, nbt)
         if (!saveResult) return false
 
-        // Только если успешно — сохраняем в persistent data игрока
+        // Только если успешно — сохраняем в capability игрока
         dockyardData.put(key, nbt)
-        player.persistentData.put("heavybullet_dockyard", dockyardData)
 
-        // Удаляем из мира, если только что успешно сохранили в NBT и persistent data
+        // Удаляем из мира, если только что успешно сохранили в NBT и capability
         val removeResult = try {
             removeShip(level, ship)
             true
         } catch (e: Exception) {
             dockyardData.remove(key)
-            player.persistentData.put("heavybullet_dockyard", dockyardData)
             false
         }
         if (!removeResult) return false
@@ -188,7 +186,7 @@ object VModSchematicJavaHelper {
     }
 
     /**
-     * Спавн корабля из NBT (в мир из dockyard игрока)
+     * Спавн корабля из NBT (в мир из capability игрока)
      * @return true если успешно, иначе false
      */
     @JvmStatic
@@ -199,8 +197,8 @@ object VModSchematicJavaHelper {
         nbt: CompoundTag,
         slot: Int
     ): Boolean {
-        // Проверяем что в dockyard есть корабль
-        val dockyardData = DockyardPlayerDataUtil.getDockyardData(player)
+        // Проверяем что в capability есть корабль
+        val dockyardData = PlayerDockyardDataUtil.getOrCreate(player).dockyardData
         val key = "ship$slot"
         if (!dockyardData.contains(key)) {
             return false
@@ -229,7 +227,6 @@ object VModSchematicJavaHelper {
         val success = spawnShipFromNBT(level, player, uuid, player.position(), nbt)
         if (success) {
             dockyardData.remove(key)
-            player.persistentData.put("heavybullet_dockyard", dockyardData)
             return true
         }
         return false

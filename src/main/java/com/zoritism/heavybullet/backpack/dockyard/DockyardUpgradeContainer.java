@@ -99,7 +99,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
             // Синхронизация blockMode и blockPos вместе с слотами!
             Map<Integer, CompoundTag> slots = new HashMap<>();
             CompoundTag dockyard = currentWrapper != null && player instanceof ServerPlayer sp ?
-                    DockyardPlayerDataUtil.getDockyardData(sp)
+                    com.zoritism.heavybullet.backpack.dockyard.PlayerDockyardDataUtil.getOrCreate(sp).getDockyardData()
                     : new CompoundTag();
             for (int i = 0; i < 2; ++i) {
                 String key = "ship" + i;

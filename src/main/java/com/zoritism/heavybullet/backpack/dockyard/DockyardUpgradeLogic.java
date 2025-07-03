@@ -7,6 +7,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
@@ -45,7 +46,8 @@ public class DockyardUpgradeLogic {
         // =============== BLOCKENTITY LOGIC ===============
         if (isOpenedAsBlock) {
             if (release) {
-                CompoundTag dockyardData = DockyardPlayerDataUtil.getDockyardData(player);
+                PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
+                CompoundTag dockyardData = data.getDockyardData();
                 String key = "ship" + slotIndex;
                 if (dockyardData.contains(key)) {
                     CompoundTag shipNbt = dockyardData.getCompound(key);
@@ -66,7 +68,8 @@ public class DockyardUpgradeLogic {
                 return;
             }
 
-            CompoundTag dockyardData = DockyardPlayerDataUtil.getDockyardData(player);
+            PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
+            CompoundTag dockyardData = data.getDockyardData();
             String key = "ship" + slotIndex;
             if (dockyardData.contains(key)) {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
@@ -93,9 +96,11 @@ public class DockyardUpgradeLogic {
             return;
         }
 
-        // =============== PLAYER DATA LOGIC (PERSISTENT) ===============
+        // =============== PLAYER CAPABILITY LOGIC ===============
         if (player != null) {
-            CompoundTag dockyardData = DockyardPlayerDataUtil.getDockyardData(player);
+            PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
+            CompoundTag dockyardData = data.getDockyardData();
+
             String key = "ship" + slotIndex;
 
             if (release) {
@@ -171,7 +176,8 @@ public class DockyardUpgradeLogic {
     }
 
     public static void syncDockyardToClient(ServerPlayer player) {
-        CompoundTag dockyard = DockyardPlayerDataUtil.getDockyardData(player);
+        PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
+        CompoundTag dockyard = data.getDockyardData();
         Map<Integer, CompoundTag> slots = new HashMap<>();
         for (int i = 0; i < 2; ++i) {
             String key = "ship" + i;
