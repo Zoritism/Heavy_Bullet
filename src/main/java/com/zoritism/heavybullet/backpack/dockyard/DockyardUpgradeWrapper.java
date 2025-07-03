@@ -131,22 +131,17 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     /**
-     * Новый способ: частицы летят по вектору через параметры Minecraft (dx,dy,dz и speed).
-     * Не используется ручное обновление позиции или списки частиц.
+     * Использует частицы FLAME: они летят по вектору (dx,dy,dz) * speed, как нужно.
      */
     private void tickProcessParticlesReal(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
-        // Центр рюкзака (куда летят)
         double targetX = blockPos.getX() + 0.5;
         double targetY = blockPos.getY() + 0.7;
         double targetZ = blockPos.getZ() + 0.5;
 
-        // Определяем AABB корабля
         Object vsShip = ship.getServerShip();
         AABB aabb = tryGetShipAABB(vsShip);
 
         double margin = 2.0;
-
-        // Количество частиц: геометрическая прогрессия с увеличением для больших кораблей
         int particleCount;
         if (aabb != null) {
             double sizeX = aabb.maxX - aabb.minX + 2 * margin;
@@ -156,8 +151,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
             double minParticles = 4;
             double maxParticles = 90;
-            double vol0 = 125.0; // 5x5x5
-            double maxVolumeForDouble = 125000.0; // 50x50x50
+            double vol0 = 125.0;
+            double maxVolumeForDouble = 125000.0;
             double exp = 1.1;
 
             double multiplier = 1.0;
@@ -170,7 +165,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             particleCount = 4;
         }
 
-        // Плавное появление частиц по мере process
         double minPercent = 0.1, maxPercent = 1.0;
         double percent = minPercent + (maxPercent - minPercent) * process;
         int countThisTick = (int) Math.ceil(particleCount * percent);
@@ -188,18 +182,16 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double dy = targetY - sy;
                 double dz = targetZ - sz;
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (len < 0.01) len = 0.01; // страховка
+                if (len < 0.01) len = 0.01;
 
-                // Вектор направления (нормализованный)
                 double vx = dx / len;
                 double vy = dy / len;
                 double vz = dz / len;
 
-                // speed: чтобы частица пролетела путь примерно за 1 секунду (20 тиков)
                 double lifetimeTicks = 24.0 + Math.random() * 16.0;
                 double speed = len / lifetimeTicks;
 
-                level.sendParticles(ParticleTypes.PORTAL, sx, sy, sz, 1, vx, vy, vz, speed);
+                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx * speed, vy * speed, vz * speed, 0.0);
             }
         } else {
             double minX = blockPos.getX() - 2, maxX = blockPos.getX() + 2;
@@ -223,7 +215,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double lifetimeTicks = 24.0 + Math.random() * 16.0;
                 double speed = len / lifetimeTicks;
 
-                level.sendParticles(ParticleTypes.PORTAL, sx, sy, sz, 1, vx, vy, vz, speed);
+                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx * speed, vy * speed, vz * speed, 0.0);
             }
         }
     }
