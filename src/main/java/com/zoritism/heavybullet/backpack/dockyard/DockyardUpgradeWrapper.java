@@ -35,9 +35,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
     private static final int SHIP_RAY_DIST = 15;
 
-    // Для анимированных частиц, ключ - blockPos.asLong()
+    // Ключ: blockPos.asLong(), Value: List<ActiveParticle>
     private static final Map<Long, List<ActiveParticle>> FLYING_PARTICLES = new HashMap<>();
-    private static final Map<Long, ParticleProcessState> PARTICLE_PROCESS = new HashMap<>();
 
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
@@ -51,7 +50,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             BlockEntity be = getStorageBlockEntity(level, blockPos);
             if (be == null) {
                 cleanupFlyingParticles(blockPos);
-                PARTICLE_PROCESS.remove(blockPos.asLong());
                 return;
             }
             CompoundTag tag = getPersistentData(be);
@@ -78,7 +76,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                     LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Ship not found or ID mismatch at process end. Aborting insert for slot {}", slot);
                     clearProcess(tag, be);
                     cleanupFlyingParticles(blockPos);
-                    PARTICLE_PROCESS.remove(blockPos.asLong());
                     return;
                 }
 
@@ -135,11 +132,9 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
                     clearProcess(tag, be);
                     cleanupFlyingParticles(blockPos);
-                    PARTICLE_PROCESS.remove(blockPos.asLong());
                 }
             } else {
                 cleanupFlyingParticles(blockPos);
-                PARTICLE_PROCESS.remove(blockPos.asLong());
             }
         }
     }
@@ -148,9 +143,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     private void tickProcessParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
         long key = blockPos.asLong();
-        if (!PARTICLE_PROCESS.containsKey(key)) {
-            PARTICLE_PROCESS.put(key, new ParticleProcessState());
-        }
 
         // Количество и скорость
         double minPercent = 0.1; // 10%
@@ -175,7 +167,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             double sizeY = aabb.maxY - aabb.minY + 2 * margin;
             double sizeZ = aabb.maxZ - aabb.minZ + 2 * margin;
             // Геометрическая прогрессия: particleCount = min + (max-min)*((volume/vol0)^exp)
-            // Для больших кораблей экспоненциальный рост, для маленьких очень мало (от ~4 до ~90)
             double volume = Math.max(sizeX * sizeY * sizeZ, 1.0);
             double minParticles = 4;
             double maxParticles = 90;
@@ -192,11 +183,10 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         // УДАЛЯЕМ лишние частицы, если их стало больше, чем нужно (когда уменьшается process)
         while (list.size() > desiredCount) {
-            // Удаляем самые старые (они долетят в ближайшие тики)
             list.remove(0);
         }
 
-        // Добавляем новые частицы, если их меньше чем нужно
+        // ДОБАВЛЯЕМ новые частицы, если их меньше чем нужно
         if (aabb != null) {
             double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
             double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
@@ -212,7 +202,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 double life = Math.max(1.0, len / speed);
 
-                // Двигается по вектору — не пересоздаётся!
+                // Вектор движения частицы
                 double vx = dx / life;
                 double vy = dy / life;
                 double vz = dz / life;
@@ -242,12 +232,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             }
         }
 
-        // Апдейтим и рендерим частицы. Теперь ЧАСТИЦЫ ДВИГАЮТСЯ, не переспавниваются!
+        // ДВИГАЕМ И РЕНДЕРИМ частицы (каждая частица живет и летит по своему вектору)
         Iterator<ActiveParticle> iter = list.iterator();
         while (iter.hasNext()) {
             ActiveParticle p = iter.next();
             p.update();
-            // Используем частицы эндермена (PORTAL)
+            // ВНИМАНИЕ: чтобы частица летела к рюкзаку, нужно использовать sendParticles с нулевой скоростью!
+            // Скорость задаётся только вектором движения и обновлением позиции p.x/p.y/p.z
             level.sendParticles(ParticleTypes.PORTAL, p.x, p.y, p.z, 1, 0, 0, 0, 0);
             if (p.isArrived()) {
                 iter.remove();
@@ -258,8 +249,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private void cleanupFlyingParticles(BlockPos blockPos) {
         FLYING_PARTICLES.remove(blockPos.asLong());
     }
-
-    private static class ParticleProcessState {}
 
     private static class ActiveParticle {
         double x, y, z;
