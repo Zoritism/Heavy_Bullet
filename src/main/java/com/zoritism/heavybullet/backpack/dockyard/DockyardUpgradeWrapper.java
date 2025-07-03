@@ -34,6 +34,9 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
     private static final int SHIP_RAY_DIST = 15;
 
+    // Ключ: blockPos.asLong(), Value: List<ActiveParticle>
+    private static final Map<Long, List<ActiveParticle>> FLYING_PARTICLES = new HashMap<>();
+
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
     }
@@ -45,6 +48,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         if (entity == null && blockPos != null) {
             BlockEntity be = getStorageBlockEntity(level, blockPos);
             if (be == null) {
+                cleanupFlyingParticles(blockPos);
                 return;
             }
             CompoundTag tag = getPersistentData(be);
@@ -70,13 +74,14 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 if (!shipValid) {
                     LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Ship not found or ID mismatch at process end. Aborting insert for slot {}", slot);
                     clearProcess(tag, be);
+                    cleanupFlyingParticles(blockPos);
                     return;
                 }
 
                 int animationTicks = Math.min(ticks, ANIMATION_TICKS);
                 double process = animationTicks / (double) ANIMATION_TICKS;
 
-                tickProcessParticlesReal(serverLevel, blockPos, ship, process);
+                tickProcessParticlesSimulated(serverLevel, blockPos, ship, process);
 
                 if (ticks >= ANIMATION_TICKS) {
                     CompoundTag shipNbt = new CompoundTag();
@@ -125,19 +130,23 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                     }
 
                     clearProcess(tag, be);
+                    cleanupFlyingParticles(blockPos);
                 }
+            } else {
+                cleanupFlyingParticles(blockPos);
             }
         }
     }
 
     /**
-     * Использует частицы FLAME: все летят в одну точку (центр блока рюкзака, но ниже на 0.5 блока).
-     * Вектор направления (vx, vy, vz) строго нормализован — "пинок" к цели.
+     * Спавнит и двигает "симулированные" частицы: каждый тик их позиция обновляется, они летят к цели.
      */
-    private void tickProcessParticlesReal(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
+    private void tickProcessParticlesSimulated(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
+        long key = blockPos.asLong();
+
         // Целевая точка: центр блока рюкзака, но ниже на 0.5 блока
         double targetX = blockPos.getX() + 0.5;
-        double targetY = blockPos.getY(); // на 0.5 ниже центра блока (если нужно ниже, поставь -0.5)
+        double targetY = blockPos.getY(); // ниже центра блока
         double targetZ = blockPos.getZ() + 0.5;
 
         Object vsShip = ship.getServerShip();
@@ -169,47 +178,104 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         double minPercent = 0.1, maxPercent = 1.0;
         double percent = minPercent + (maxPercent - minPercent) * process;
-        int countThisTick = (int) Math.ceil(particleCount * percent);
+        int desiredCount = (int) Math.ceil(particleCount * percent);
 
-        // Вектор направления (одинаковый для всех частиц в этом тике)
-        for (int i = 0; i < countThisTick; i++) {
-            double sx, sy, sz;
-            if (aabb != null) {
-                double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
-                double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
-                double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
-                sx = minX + Math.random() * (maxX - minX);
-                sy = minY + Math.random() * (maxY - minY);
-                sz = minZ + Math.random() * (maxZ - minZ);
-            } else {
-                double minX = blockPos.getX() - 2, maxX = blockPos.getX() + 2;
-                double minY = blockPos.getY() + 2, maxY = blockPos.getY() + 6;
-                double minZ = blockPos.getZ() - 2, maxZ = blockPos.getZ() + 2;
-                sx = minX + Math.random() * (maxX - minX);
-                sy = minY + Math.random() * (maxY - minY);
-                sz = minZ + Math.random() * (maxZ - minZ);
+        List<ActiveParticle> particles = FLYING_PARTICLES.computeIfAbsent(key, k -> new ArrayList<>());
+
+        // Удалить лишние (старейшие) если уменьшилось desiredCount
+        while (particles.size() > desiredCount) {
+            particles.remove(0);
+        }
+
+        // Добавляем новые частицы, если их не хватает
+        if (aabb != null) {
+            double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
+            double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
+            double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
+            while (particles.size() < desiredCount) {
+                double sx = minX + Math.random() * (maxX - minX);
+                double sy = minY + Math.random() * (maxY - minY);
+                double sz = minZ + Math.random() * (maxZ - minZ);
+
+                double dx = targetX - sx;
+                double dy = targetY - sy;
+                double dz = targetZ - sz;
+                double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (distance < 0.01) distance = 0.01;
+
+                double lifetimeTicks = 24.0 + Math.random() * 16.0;
+                double vx = dx / lifetimeTicks;
+                double vy = dy / lifetimeTicks;
+                double vz = dz / lifetimeTicks;
+
+                particles.add(new ActiveParticle(sx, sy, sz, vx, vy, vz, lifetimeTicks));
             }
+        } else {
+            double minX = blockPos.getX() - 2, maxX = blockPos.getX() + 2;
+            double minY = blockPos.getY() + 2, maxY = blockPos.getY() + 6;
+            double minZ = blockPos.getZ() - 2, maxZ = blockPos.getZ() + 2;
+            while (particles.size() < desiredCount) {
+                double sx = minX + Math.random() * (maxX - minX);
+                double sy = minY + Math.random() * (maxY - minY);
+                double sz = minZ + Math.random() * (maxZ - minZ);
 
-            // Вектор строго к цели
-            double dx = targetX - sx;
-            double dy = targetY - sy;
-            double dz = targetZ - sz;
-            double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (distance < 0.01) distance = 0.01;
+                double dx = targetX - sx;
+                double dy = targetY - sy;
+                double dz = targetZ - sz;
+                double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (distance < 0.01) distance = 0.01;
 
-            double vx = dx / distance;
-            double vy = dy / distance;
-            double vz = dz / distance;
+                double lifetimeTicks = 24.0 + Math.random() * 16.0;
+                double vx = dx / lifetimeTicks;
+                double vy = dy / lifetimeTicks;
+                double vz = dz / lifetimeTicks;
 
-            // lifetimeTicks = за сколько тиков частица должна прилететь к цели
-            double lifetimeTicks = 24.0 + Math.random() * 16.0;
-            double speed = distance / lifetimeTicks;
+                particles.add(new ActiveParticle(sx, sy, sz, vx, vy, vz, lifetimeTicks));
+            }
+        }
 
-            // Пинок в сторону цели (direction = vx,vy,vz, модуль= speed)
-            level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, speed);
+        // Обновить позиции всех частиц и отрисовать
+        Iterator<ActiveParticle> iter = particles.iterator();
+        while (iter.hasNext()) {
+            ActiveParticle p = iter.next();
+            p.update();
+            level.sendParticles(ParticleTypes.FLAME, p.x, p.y, p.z, 1, 0, 0, 0, 0);
+            if (p.isArrived()) {
+                iter.remove();
+            }
         }
     }
 
+    private void cleanupFlyingParticles(BlockPos blockPos) {
+        FLYING_PARTICLES.remove(blockPos.asLong());
+    }
+
+    private static class ActiveParticle {
+        double x, y, z;
+        final double vx, vy, vz;
+        final double lifeTicks;
+        int age;
+
+        public ActiveParticle(double sx, double sy, double sz, double vx, double vy, double vz, double lifeTicks) {
+            this.x = sx; this.y = sy; this.z = sz;
+            this.vx = vx; this.vy = vy; this.vz = vz;
+            this.lifeTicks = lifeTicks;
+            this.age = 0;
+        }
+        public void update() {
+            if (!isArrived()) {
+                this.x += vx;
+                this.y += vy;
+                this.z += vz;
+            }
+            age++;
+        }
+        public boolean isArrived() {
+            return age >= lifeTicks;
+        }
+    }
+
+    // ---- остальной код без изменений ----
     public IStorageWrapper getStorageWrapper() {
         return this.storageWrapper;
     }
