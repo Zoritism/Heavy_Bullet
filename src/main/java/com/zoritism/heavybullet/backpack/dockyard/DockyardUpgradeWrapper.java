@@ -131,13 +131,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     /**
-     * Использует частицы FLAME: все летят к одной точке (центр блока рюкзака, но ниже на 0.5 блока).
+     * Использует частицы FLAME: все летят в одну точку (центр блока рюкзака, но ниже на 0.5 блока).
      * Вектор направления (vx, vy, vz) строго нормализован — "пинок" к цели.
      */
     private void tickProcessParticlesReal(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
         // Целевая точка: центр блока рюкзака, но ниже на 0.5 блока
         double targetX = blockPos.getX() + 0.5;
-        double targetY = blockPos.getY(); // именно +0.0 — то есть на полблока ниже центра блока
+        double targetY = blockPos.getY(); // на 0.5 ниже центра блока (если нужно ниже, поставь -0.5)
         double targetZ = blockPos.getZ() + 0.5;
 
         Object vsShip = ship.getServerShip();
@@ -171,58 +171,42 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         double percent = minPercent + (maxPercent - minPercent) * process;
         int countThisTick = (int) Math.ceil(particleCount * percent);
 
-        if (aabb != null) {
-            double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
-            double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
-            double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
-            for (int i = 0; i < countThisTick; i++) {
-                double sx = minX + Math.random() * (maxX - minX);
-                double sy = minY + Math.random() * (maxY - minY);
-                double sz = minZ + Math.random() * (maxZ - minZ);
-
-                // Вектор направления от источника к цели
-                double dx = targetX - sx;
-                double dy = targetY - sy;
-                double dz = targetZ - sz;
-                double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (distance < 0.01) distance = 0.01;
-
-                // Именно нормализованный вектор — только направление, длина = 1
-                double vx = dx / distance;
-                double vy = dy / distance;
-                double vz = dz / distance;
-
-                // Модуль скорости: частица долетит до цели примерно за lifetime тиков
-                double lifetimeTicks = 24.0 + Math.random() * 16.0;
-                double speed = distance / lifetimeTicks;
-
-                // Дать частице "пинок" строго в цель!
-                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, speed);
+        // Вектор направления (одинаковый для всех частиц в этом тике)
+        for (int i = 0; i < countThisTick; i++) {
+            double sx, sy, sz;
+            if (aabb != null) {
+                double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
+                double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
+                double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
+                sx = minX + Math.random() * (maxX - minX);
+                sy = minY + Math.random() * (maxY - minY);
+                sz = minZ + Math.random() * (maxZ - minZ);
+            } else {
+                double minX = blockPos.getX() - 2, maxX = blockPos.getX() + 2;
+                double minY = blockPos.getY() + 2, maxY = blockPos.getY() + 6;
+                double minZ = blockPos.getZ() - 2, maxZ = blockPos.getZ() + 2;
+                sx = minX + Math.random() * (maxX - minX);
+                sy = minY + Math.random() * (maxY - minY);
+                sz = minZ + Math.random() * (maxZ - minZ);
             }
-        } else {
-            double minX = blockPos.getX() - 2, maxX = blockPos.getX() + 2;
-            double minY = blockPos.getY() + 2, maxY = blockPos.getY() + 6;
-            double minZ = blockPos.getZ() - 2, maxZ = blockPos.getZ() + 2;
-            for (int i = 0; i < countThisTick; i++) {
-                double sx = minX + Math.random() * (maxX - minX);
-                double sy = minY + Math.random() * (maxY - minY);
-                double sz = minZ + Math.random() * (maxZ - minZ);
 
-                double dx = targetX - sx;
-                double dy = targetY - sy;
-                double dz = targetZ - sz;
-                double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (distance < 0.01) distance = 0.01;
+            // Вектор строго к цели
+            double dx = targetX - sx;
+            double dy = targetY - sy;
+            double dz = targetZ - sz;
+            double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (distance < 0.01) distance = 0.01;
 
-                double vx = dx / distance;
-                double vy = dy / distance;
-                double vz = dz / distance;
+            double vx = dx / distance;
+            double vy = dy / distance;
+            double vz = dz / distance;
 
-                double lifetimeTicks = 24.0 + Math.random() * 16.0;
-                double speed = distance / lifetimeTicks;
+            // lifetimeTicks = за сколько тиков частица должна прилететь к цели
+            double lifetimeTicks = 24.0 + Math.random() * 16.0;
+            double speed = distance / lifetimeTicks;
 
-                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, speed);
-            }
+            // Пинок в сторону цели (direction = vx,vy,vz, модуль= speed)
+            level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, speed);
         }
     }
 
