@@ -179,8 +179,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             double volume = Math.max(sizeX * sizeY * sizeZ, 1.0);
             double minParticles = 4;
             double maxParticles = 90;
-            double vol0 = 40; // меньше vol0 — меньше частиц, больше vol0 — больше частиц
-            double exp = 1.1; // экспонента больше 1 — резче рост
+            double vol0 = 40;
+            double exp = 1.1;
             double norm = Math.pow(Math.min(volume / vol0, 1.0), exp);
             particleCount = (int) (minParticles + (maxParticles - minParticles) * norm);
         } else {
@@ -189,6 +189,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         int desiredCount = (int) Math.ceil(particleCount * percent);
 
         List<ActiveParticle> list = FLYING_PARTICLES.computeIfAbsent(key, k -> new ArrayList<>());
+
+        // УДАЛЯЕМ лишние частицы, если их стало больше, чем нужно (когда уменьшается process)
+        while (list.size() > desiredCount) {
+            // Удаляем самые старые (они долетят в ближайшие тики)
+            list.remove(0);
+        }
 
         // Добавляем новые частицы, если их меньше чем нужно
         if (aabb != null) {
@@ -206,7 +212,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 double life = Math.max(1.0, len / speed);
 
-                // Частьцы двигаются по вектору!
+                // Двигается по вектору — не пересоздаётся!
                 double vx = dx / life;
                 double vy = dy / life;
                 double vz = dz / life;
@@ -236,7 +242,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             }
         }
 
-        // Апдейт и рендер частиц (движение по траектории, не респавн!)
+        // Апдейтим и рендерим частицы. Теперь ЧАСТИЦЫ ДВИГАЮТСЯ, не переспавниваются!
         Iterator<ActiveParticle> iter = list.iterator();
         while (iter.hasNext()) {
             ActiveParticle p = iter.next();
