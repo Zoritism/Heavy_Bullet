@@ -1,5 +1,5 @@
 {
-  "item.heavybullet.dockyard_upgrade": "Dockyard",
+  "item.heavybullet.dockyard_upgrade": "Dockyard Upgrade",
   "heavy_bullet.dockyard.ship_released": "Ship released!",
   "heavy_bullet.dockyard.restore_failed": "Failed to release the ship!",
   "heavy_bullet.dockyard.no_ship_stored": "No ship stored in this slot!",
@@ -12,6 +12,6 @@
   "heavy_bullet.dockyard.remove_failed": "Failed to remove ship from world!",
   "heavy_bullet.dockyard.no_backpack_found": "No backpack found.",
   "heavy_bullet.dockyard.spawn_blocked": "Spawn blocked: there are blocks above the backpack.",
-  "gui.heavybullet.dockyard.title": "Ship Dockyard",
+  "gui.heavybullet.dockyard.title": "Dockyard",
   "gui.heavybullet.dockyard.tooltip": "Allows storing and deploying ships"
 }

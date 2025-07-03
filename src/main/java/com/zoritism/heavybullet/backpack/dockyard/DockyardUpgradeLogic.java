@@ -308,7 +308,7 @@ public class DockyardUpgradeLogic {
         }
 
         // Спавним так, чтобы нижняя граница корабля (minY) была ровно на 5 блоков выше рюкзака
-        double spawnY = y + 5.0 - shipMinY;
+        double spawnY = y + 5.0 + shipMinY;
         Vec3 spawnPos = new Vec3(x, spawnY, z);
 
         // 1. Рейтрейс вверх на 50 блоков
