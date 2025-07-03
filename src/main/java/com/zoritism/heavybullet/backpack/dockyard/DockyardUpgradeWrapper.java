@@ -131,11 +131,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     /**
-     * Использует частицы FLAME: они летят по вектору (dx,dy,dz) * speed, как нужно.
+     * Использует частицы FLAME: все летят к одной точке (центр блока рюкзака, но ниже на 0.5 блока).
      */
     private void tickProcessParticlesReal(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
+        // Целевая точка: центр блока рюкзака, но ниже на 0.5 блока
         double targetX = blockPos.getX() + 0.5;
-        double targetY = blockPos.getY() + 0.7;
+        double targetY = blockPos.getY() + 0.0; // 0.5 ниже центра (0.5 + (-0.5))
         double targetZ = blockPos.getZ() + 0.5;
 
         Object vsShip = ship.getServerShip();
@@ -178,6 +179,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double sy = minY + Math.random() * (maxY - minY);
                 double sz = minZ + Math.random() * (maxZ - minZ);
 
+                // Вектор только в одну точку
                 double dx = targetX - sx;
                 double dy = targetY - sy;
                 double dz = targetZ - sz;
@@ -191,7 +193,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double lifetimeTicks = 24.0 + Math.random() * 16.0;
                 double speed = len / lifetimeTicks;
 
-                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx * speed, vy * speed, vz * speed, 0.0);
+                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, speed);
             }
         } else {
             double minX = blockPos.getX() - 2, maxX = blockPos.getX() + 2;
@@ -202,6 +204,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double sy = minY + Math.random() * (maxY - minY);
                 double sz = minZ + Math.random() * (maxZ - minZ);
 
+                // Вектор только в одну точку
                 double dx = targetX - sx;
                 double dy = targetY - sy;
                 double dz = targetZ - sz;
@@ -215,12 +218,11 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double lifetimeTicks = 24.0 + Math.random() * 16.0;
                 double speed = len / lifetimeTicks;
 
-                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx * speed, vy * speed, vz * speed, 0.0);
+                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, speed);
             }
         }
     }
 
-    // ---- остальной код без изменений ----
     public IStorageWrapper getStorageWrapper() {
         return this.storageWrapper;
     }
