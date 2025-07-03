@@ -133,47 +133,24 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
                     if (player != null) {
                         try {
+                            // BLOCK MODE: checkDistance = false!
                             result = VModSchematicJavaHelper.tryStoreShipToPlayerDockyard(
                                     serverLevel,
                                     player,
                                     UUID.randomUUID(),
                                     ship,
                                     shipNbt,
-                                    slot
+                                    slot,
+                                    false // отключаем проверку расстояния для режима блок!
                             );
                             if (result) {
                                 LOGIC_LOGGER.info("[DockyardUpgradeLogic] Ship stored to player {} slot {}", player.getGameProfile().getName(), slot);
                             } else {
-                                // Анализируем причину (слот занят? далеко? сохранить не удалось?)
+                                // Анализируем причину (слот занят? сохранить не удалось?)
                                 String key = "ship" + slot;
                                 if (player.getCapability(PlayerDockyardDataProvider.DOCKYARD_CAP).map(cap -> cap.getDockyardData().contains(key)).orElse(false)) {
                                     failReason = "slot already occupied";
                                 } else {
-                                    // Проверим расстояние до игрока и корабля
-                                    try {
-                                        Object shipObj = ship.getServerShip();
-                                        Object aabb = shipObj.getClass().getMethod("getWorldAABB").invoke(shipObj);
-                                        if (aabb != null) {
-                                            double minX = (double) aabb.getClass().getMethod("minX").invoke(aabb);
-                                            double maxX = (double) aabb.getClass().getMethod("maxX").invoke(aabb);
-                                            double minY = (double) aabb.getClass().getMethod("minY").invoke(aabb);
-                                            double maxY = (double) aabb.getClass().getMethod("maxY").invoke(aabb);
-                                            double minZ = (double) aabb.getClass().getMethod("minZ").invoke(aabb);
-                                            double maxZ = (double) aabb.getClass().getMethod("maxZ").invoke(aabb);
-                                            double px = player.getX();
-                                            double py = player.getEyeY();
-                                            double pz = player.getZ();
-                                            double dx = Math.max(Math.max(minX - px, 0.0), px - maxX);
-                                            double dy = Math.max(Math.max(minY - py, 0.0), py - maxY);
-                                            double dz = Math.max(Math.max(minZ - pz, 0.0), pz - maxZ);
-                                            double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                                            if (dist > 4.0) {
-                                                failReason = "player too far from ship (" + dist + " > 4.0)";
-                                            }
-                                        }
-                                    } catch (Exception ignored) {}
-                                }
-                                if (failReason == null) {
                                     failReason = "unknown reason (see tryStoreShipToPlayerDockyard)";
                                 }
                                 LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Failed to save ship to player {} slot {}: {}", player.getGameProfile().getName(), slot, failReason);
@@ -268,18 +245,22 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return null;
     }
 
+    // Исправлено: частицы летят к рюкзаку!
     private void spawnDockyardParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship) {
         Object vsShip = ship.getServerShip();
         AABB aabb = tryGetShipAABB(vsShip);
+        double dx = blockPos.getX() + 0.5;
+        double dy = blockPos.getY() + 1.2;
+        double dz = blockPos.getZ() + 0.5;
         if (aabb == null) {
             for (int i = 0; i < 4; i++) {
                 double sx = blockPos.getX() + 0.5 + (Math.random() - 0.5) * 4.0;
                 double sy = blockPos.getY() + 4 + Math.random() * 4.0;
                 double sz = blockPos.getZ() + 0.5 + (Math.random() - 0.5) * 4.0;
-                double dx = blockPos.getX() + 0.5;
-                double dy = blockPos.getY() + 1.2;
-                double dz = blockPos.getZ() + 0.5;
-                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 0, (dx-sx)/10, (dy-sy)/10, (dz-sz)/10, 0.01);
+                double vx = (dx - sx) / 20.0;
+                double vy = (dy - sy) / 20.0;
+                double vz = (dz - sz) / 20.0;
+                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, 0.01);
             }
             return;
         }
@@ -287,15 +268,15 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
         double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
         double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
-        double dx = blockPos.getX() + 0.5;
-        double dy = blockPos.getY() + 1.2;
-        double dz = blockPos.getZ() + 0.5;
 
         for (int i = 0; i < 8; i++) {
             double sx = minX + Math.random() * (maxX - minX);
             double sy = minY + Math.random() * (maxY - minY);
             double sz = minZ + Math.random() * (maxZ - minZ);
-            level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 0, (dx-sx)/10, (dy-sy)/10, (dz-sz)/10, 0.01);
+            double vx = (dx - sx) / 20.0;
+            double vy = (dy - sy) / 20.0;
+            double vz = (dz - sz) / 20.0;
+            level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, 0.01);
         }
     }
 

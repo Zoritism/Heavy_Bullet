@@ -61,6 +61,7 @@ object VModSchematicJavaHelper {
 
     /**
      * Сохранить корабль в capability игрока (глобально, а не в рюкзаке!)
+     * @param checkDistance - если true, проверять расстояние до игрока (item mode); если false, не проверять (block mode)
      * @return true если успешно, иначе false
      */
     @JvmStatic
@@ -70,7 +71,8 @@ object VModSchematicJavaHelper {
         uuid: UUID,
         ship: DockyardUpgradeLogic.ServerShipHandle,
         nbt: CompoundTag,
-        slot: Int
+        slot: Int,
+        checkDistance: Boolean = true
     ): Boolean {
         // Не даём забирать корабль если у игрока уже есть в этом слоте
         val dockyardData = PlayerDockyardDataUtil.getOrCreate(player).dockyardData
@@ -79,23 +81,25 @@ object VModSchematicJavaHelper {
             return false
         }
 
-        // Проверяем расстояние до игрока (максимум 4 блока)
-        val playerPos = player.eyePosition
-        val shipObj = ship.getServerShip()
-        val aabb = try { shipObj.javaClass.getMethod("getWorldAABB").invoke(shipObj) } catch (_: Exception) { null }
-        if (aabb != null) {
-            val minX = aabb.javaClass.getMethod("minX").invoke(aabb) as Double
-            val maxX = aabb.javaClass.getMethod("maxX").invoke(aabb) as Double
-            val minY = aabb.javaClass.getMethod("minY").invoke(aabb) as Double
-            val maxY = aabb.javaClass.getMethod("maxY").invoke(aabb) as Double
-            val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
-            val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
-            val dx = maxOf(minX - playerPos.x, 0.0, playerPos.x - maxX)
-            val dy = maxOf(minY - playerPos.y, 0.0, playerPos.y - maxY)
-            val dz = maxOf(minZ - playerPos.z, 0.0, playerPos.z - maxZ)
-            val dist = sqrt(dx * dx + dy * dy + dz * dz)
-            if (dist > 4.0) {
-                return false
+        // Проверяем расстояние до игрока (максимум 4 блока), только если включено
+        if (checkDistance) {
+            val playerPos = player.eyePosition
+            val shipObj = ship.getServerShip()
+            val aabb = try { shipObj.javaClass.getMethod("getWorldAABB").invoke(shipObj) } catch (_: Exception) { null }
+            if (aabb != null) {
+                val minX = aabb.javaClass.getMethod("minX").invoke(aabb) as Double
+                val maxX = aabb.javaClass.getMethod("maxX").invoke(aabb) as Double
+                val minY = aabb.javaClass.getMethod("minY").invoke(aabb) as Double
+                val maxY = aabb.javaClass.getMethod("maxY").invoke(aabb) as Double
+                val minZ = aabb.javaClass.getMethod("minZ").invoke(aabb) as Double
+                val maxZ = aabb.javaClass.getMethod("maxZ").invoke(aabb) as Double
+                val dx = maxOf(minX - playerPos.x, 0.0, playerPos.x - maxX)
+                val dy = maxOf(minY - playerPos.y, 0.0, playerPos.y - maxY)
+                val dz = maxOf(minZ - playerPos.z, 0.0, playerPos.z - maxZ)
+                val dist = sqrt(dx * dx + dy * dy + dz * dz)
+                if (dist > 4.0) {
+                    return false
+                }
             }
         }
 
