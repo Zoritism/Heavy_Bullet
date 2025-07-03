@@ -131,10 +131,11 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     }
 
     /**
-     * Новый реальный способ спавна частиц — частицы летят по вектору (dx,dy,dz) с заданной скоростью speed.
+     * Новый способ: частицы летят по вектору через параметры Minecraft (dx,dy,dz и speed).
+     * Не используется ручное обновление позиции или списки частиц.
      */
     private void tickProcessParticlesReal(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
-        // Определяем центр рюкзака (точка назначения)
+        // Центр рюкзака (куда летят)
         double targetX = blockPos.getX() + 0.5;
         double targetY = blockPos.getY() + 0.7;
         double targetZ = blockPos.getZ() + 0.5;
@@ -145,7 +146,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
         double margin = 2.0;
 
-        // Количество частиц: геометрическая прогрессия с коэффициентом для больших кораблей
+        // Количество частиц: геометрическая прогрессия с увеличением для больших кораблей
         int particleCount;
         if (aabb != null) {
             double sizeX = aabb.maxX - aabb.minX + 2 * margin;
@@ -169,7 +170,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             particleCount = 4;
         }
 
-        // Мягко наращиваем количество частиц по мере process (чтобы не сразу все)
+        // Плавное появление частиц по мере process
         double minPercent = 0.1, maxPercent = 1.0;
         double percent = minPercent + (maxPercent - minPercent) * process;
         int countThisTick = (int) Math.ceil(particleCount * percent);
@@ -187,16 +188,15 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double dy = targetY - sy;
                 double dz = targetZ - sz;
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (len < 0.01) len = 0.01; // страховка
 
-                if (len < 0.01) len = 0.01; // на всякий случай
-
-                // Вектор направления
+                // Вектор направления (нормализованный)
                 double vx = dx / len;
                 double vy = dy / len;
                 double vz = dz / len;
 
-                // speed подбирается так, чтобы частица пролетела путь за 0.8-1.2 сек
-                double lifetimeTicks = 24.0 + Math.random() * 16.0; // 1.2 сек @20tps
+                // speed: чтобы частица пролетела путь примерно за 1 секунду (20 тиков)
+                double lifetimeTicks = 24.0 + Math.random() * 16.0;
                 double speed = len / lifetimeTicks;
 
                 level.sendParticles(ParticleTypes.PORTAL, sx, sy, sz, 1, vx, vy, vz, speed);
@@ -214,7 +214,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double dy = targetY - sy;
                 double dz = targetZ - sz;
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
                 if (len < 0.01) len = 0.01;
 
                 double vx = dx / len;
@@ -229,46 +228,9 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         }
     }
 
-    private CompoundTag getPersistentData(BlockEntity blockEntity) {
-        try {
-            Method m = blockEntity.getClass().getMethod("getPersistentData");
-            Object result = m.invoke(blockEntity);
-            if (result instanceof CompoundTag tag) {
-                return tag;
-            }
-        } catch (Exception e) {
-        }
-        return new CompoundTag();
-    }
-
-    private static CompoundTag getPersistentDataStatic(BlockEntity blockEntity) {
-        try {
-            Method m = blockEntity.getClass().getMethod("getPersistentData");
-            Object result = m.invoke(blockEntity);
-            if (result instanceof CompoundTag tag) {
-                return tag;
-            }
-        } catch (Exception e) {
-        }
-        return new CompoundTag();
-    }
-
-    private void clearProcess(CompoundTag tag, BlockEntity be) {
-        tag.putBoolean(NBT_PROCESS_ACTIVE, false);
-        tag.putInt(NBT_PROCESS_TICKS, 0);
-        tag.putLong(NBT_PROCESS_SHIP_ID, 0L);
-        tag.putInt(NBT_PROCESS_SLOT, -1);
-        tag.remove(NBT_PROCESS_PLAYER_UUID);
-        be.setChanged();
-    }
-
-    private void syncBackpackShipsToBlock(BlockEntity be) {}
-
-    @Nullable
-    public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
-        if (level == null || pos == null) return null;
-        BlockEntity be = level.getBlockEntity(pos);
-        return (be != null && !be.isRemoved()) ? be : null;
+    // ---- остальной код без изменений ----
+    public IStorageWrapper getStorageWrapper() {
+        return this.storageWrapper;
     }
 
     @Nullable
@@ -295,6 +257,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return ItemStack.EMPTY;
     }
 
+    @Nullable
+    public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
+        if (level == null || pos == null) return null;
+        BlockEntity be = level.getBlockEntity(pos);
+        return (be != null && !be.isRemoved()) ? be : null;
+    }
+
     public static void startInsertShipProcess(BlockEntity be, int slot, long shipId, UUID playerUuid) {
         CompoundTag tag = getPersistentDataStatic(be);
         tag.putBoolean(NBT_PROCESS_ACTIVE, true);
@@ -310,6 +279,41 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     public static void startInsertShipProcess(BlockEntity be, int slot, long shipId) {
         startInsertShipProcess(be, slot, shipId, null);
     }
+
+    private void clearProcess(CompoundTag tag, BlockEntity be) {
+        tag.putBoolean(NBT_PROCESS_ACTIVE, false);
+        tag.putInt(NBT_PROCESS_TICKS, 0);
+        tag.putLong(NBT_PROCESS_SHIP_ID, 0L);
+        tag.putInt(NBT_PROCESS_SLOT, -1);
+        tag.remove(NBT_PROCESS_PLAYER_UUID);
+        be.setChanged();
+    }
+
+    private CompoundTag getPersistentData(BlockEntity blockEntity) {
+        try {
+            Method m = blockEntity.getClass().getMethod("getPersistentData");
+            Object result = m.invoke(blockEntity);
+            if (result instanceof CompoundTag tag) {
+                return tag;
+            }
+        } catch (Exception e) {
+        }
+        return new CompoundTag();
+    }
+
+    private static CompoundTag getPersistentDataStatic(BlockEntity blockEntity) {
+        try {
+            Method m = blockEntity.getClass().getMethod("getPersistentData");
+            Object result = m.invoke(blockEntity);
+            if (result instanceof CompoundTag tag) {
+                return tag;
+            }
+        } catch (Exception e) {
+        }
+        return new CompoundTag();
+    }
+
+    private void syncBackpackShipsToBlock(BlockEntity be) {}
 
     @Nullable
     private ItemStack getBackpackItemFromBlockEntity(BlockEntity be) {
@@ -341,9 +345,5 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         } catch (Exception e) {
         }
         return null;
-    }
-
-    public IStorageWrapper getStorageWrapper() {
-        return this.storageWrapper;
     }
 }
