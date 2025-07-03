@@ -11,7 +11,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.core.particles.SimpleParticleType;
 import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.ITickableUpgrade;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeWrapperBase;
@@ -40,51 +39,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final Map<Long, List<ActiveParticle>> FLYING_PARTICLES = new HashMap<>();
     private static final Map<Long, ParticleProcessState> PARTICLE_PROCESS = new HashMap<>();
 
-    // Используем частицы эндермена
-    private static final SimpleParticleType ENDERMAN_PARTICLE = ParticleTypes.PORTAL;
-
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
-    }
-
-    public IStorageWrapper getStorageWrapper() {
-        return this.storageWrapper;
-    }
-
-    @Nullable
-    public ItemStack getStorageItemStack() {
-        if (storageWrapper == null) return ItemStack.EMPTY;
-        try {
-            Method m = storageWrapper.getClass().getMethod("getStack");
-            Object stack = m.invoke(storageWrapper);
-            if (stack instanceof ItemStack s && !s.isEmpty()) {
-                return s;
-            }
-        } catch (NoSuchMethodException e) {
-            try {
-                Method m2 = storageWrapper.getClass().getMethod("getStorage");
-                Object stack = m2.invoke(storageWrapper);
-                if (stack instanceof ItemStack s && !s.isEmpty()) {
-                    return s;
-                }
-            } catch (NoSuchMethodException ignored) {
-            } catch (Exception ex) {
-            }
-        } catch (Exception e) {
-        }
-        return ItemStack.EMPTY;
-    }
-
-    @Nullable
-    public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
-        if (level == null || pos == null) return null;
-        BlockEntity be = level.getBlockEntity(pos);
-        return (be != null && !be.isRemoved()) ? be : null;
-    }
-
-    @Override
-    public boolean canBeDisabled() {
-        return false;
     }
 
     @Override
@@ -185,26 +141,20 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 cleanupFlyingParticles(blockPos);
                 PARTICLE_PROCESS.remove(blockPos.asLong());
             }
-        } else if (entity instanceof Player) {
-            // ITEM MODE
         }
     }
 
-    // ПАРТИКЛЫ: Реализация анимации
+    // ---------------- ПАРТИКЛЫ ----------------
 
-    /**
-     * process: 0.0 (начало) ... 1.0 (конец)
-     */
     private void tickProcessParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
         long key = blockPos.asLong();
         if (!PARTICLE_PROCESS.containsKey(key)) {
             PARTICLE_PROCESS.put(key, new ParticleProcessState());
         }
-        ParticleProcessState state = PARTICLE_PROCESS.get(key);
 
-        // Параметры появления и скорости
+        // Количество и скорость
         double minPercent = 0.1; // 10%
-        double maxPercent = 1.0; // 100%
+        double maxPercent = 1.0;
         double percent = minPercent + (maxPercent - minPercent) * process;
 
         double minSpeed = 0.5;
@@ -215,9 +165,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         AABB aabb = tryGetShipAABB(vsShip);
 
         double margin = 2.0;
-        // Смещение точки назначения на полблока вниз:
         double targetX = blockPos.getX() + 0.5;
-        double targetY = blockPos.getY() + 0.7; // было +1.2, стало +0.7
+        double targetY = blockPos.getY() + 0.7;
         double targetZ = blockPos.getZ() + 0.5;
 
         int particleCount;
@@ -226,14 +175,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             double sizeY = aabb.maxY - aabb.minY + 2 * margin;
             double sizeZ = aabb.maxZ - aabb.minZ + 2 * margin;
             // Геометрическая прогрессия: particleCount = min + (max-min)*((volume/vol0)^exp)
-            // vol0 = средний размер (например, 100), exp≈0.7 (не слишком резко)
             double volume = Math.max(sizeX * sizeY * sizeZ, 1.0);
             double minParticles = 6;
             double maxParticles = 90;
             double vol0 = 100;
             double exp = 0.7;
-            double norm = Math.pow(volume / vol0, exp);
-            norm = Math.max(0, Math.min(1, norm));
+            double norm = Math.pow(Math.min(volume / vol0, 1.0), exp);
             particleCount = (int) (minParticles + (maxParticles - minParticles) * norm);
         } else {
             particleCount = 8;
@@ -257,7 +204,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double dz = targetZ - sz;
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 double life = Math.max(1.0, len / speed);
-                list.add(new ActiveParticle(sx, sy, sz, targetX, targetY, targetZ, life));
+
+                // Частьцы теперь двигаются по вектору!
+                double vx = dx / life;
+                double vy = dy / life;
+                double vz = dz / life;
+
+                list.add(new ActiveParticle(sx, sy, sz, vx, vy, vz, life));
             }
         } else {
             double minX = blockPos.getX() - 2, maxX = blockPos.getX() + 2;
@@ -273,17 +226,22 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double dz = targetZ - sz;
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 double life = Math.max(1.0, len / speed);
-                list.add(new ActiveParticle(sx, sy, sz, targetX, targetY, targetZ, life));
+
+                double vx = dx / life;
+                double vy = dy / life;
+                double vz = dz / life;
+
+                list.add(new ActiveParticle(sx, sy, sz, vx, vy, vz, life));
             }
         }
 
-        // Апдейт и рендер частиц (только движение, не респавн!)
+        // Апдейт и рендер частиц (движение по траектории, не респавн!)
         Iterator<ActiveParticle> iter = list.iterator();
         while (iter.hasNext()) {
             ActiveParticle p = iter.next();
             p.update();
             // Используем частицы эндермена (PORTAL)
-            level.sendParticles(ENDERMAN_PARTICLE, p.x, p.y, p.z, 1, 0, 0, 0, 0);
+            level.sendParticles(ParticleTypes.PORTAL, p.x, p.y, p.z, 1, 0, 0, 0, 0);
             if (p.isArrived()) {
                 iter.remove();
             }
@@ -298,30 +256,64 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     private static class ActiveParticle {
         double x, y, z;
-        final double sx, sy, sz;
-        final double ex, ey, ez;
-        final double totalTicks;
+        final double vx, vy, vz;
+        final double lifeTicks;
         int age;
 
-        public ActiveParticle(double sx, double sy, double sz, double ex, double ey, double ez, double totalTicks) {
-            this.x = this.sx = sx; this.y = this.sy = sy; this.z = this.sz = sz;
-            this.ex = ex; this.ey = ey; this.ez = ez;
-            this.totalTicks = totalTicks;
+        public ActiveParticle(double sx, double sy, double sz, double vx, double vy, double vz, double lifeTicks) {
+            this.x = sx; this.y = sy; this.z = sz;
+            this.vx = vx; this.vy = vy; this.vz = vz;
+            this.lifeTicks = lifeTicks;
             this.age = 0;
         }
         public void update() {
+            if (!isArrived()) {
+                this.x += vx;
+                this.y += vy;
+                this.z += vz;
+            }
             age++;
-            double t = Math.min(1.0, age / totalTicks);
-            this.x = sx + (ex - sx) * t;
-            this.y = sy + (ey - sy) * t;
-            this.z = sz + (ez - sz) * t;
         }
         public boolean isArrived() {
-            return age >= totalTicks;
+            return age >= lifeTicks;
         }
     }
 
     // ---- остальной код без изменений ----
+    public IStorageWrapper getStorageWrapper() {
+        return this.storageWrapper;
+    }
+
+    @Nullable
+    public ItemStack getStorageItemStack() {
+        if (storageWrapper == null) return ItemStack.EMPTY;
+        try {
+            Method m = storageWrapper.getClass().getMethod("getStack");
+            Object stack = m.invoke(storageWrapper);
+            if (stack instanceof ItemStack s && !s.isEmpty()) {
+                return s;
+            }
+        } catch (NoSuchMethodException e) {
+            try {
+                Method m2 = storageWrapper.getClass().getMethod("getStorage");
+                Object stack = m2.invoke(storageWrapper);
+                if (stack instanceof ItemStack s && !s.isEmpty()) {
+                    return s;
+                }
+            } catch (NoSuchMethodException ignored) {
+            } catch (Exception ex) {
+            }
+        } catch (Exception e) {
+        }
+        return ItemStack.EMPTY;
+    }
+
+    @Nullable
+    public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
+        if (level == null || pos == null) return null;
+        BlockEntity be = level.getBlockEntity(pos);
+        return (be != null && !be.isRemoved()) ? be : null;
+    }
 
     public static void startInsertShipProcess(BlockEntity be, int slot, long shipId, UUID playerUuid) {
         CompoundTag tag = getPersistentDataStatic(be);
