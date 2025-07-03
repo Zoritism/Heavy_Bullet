@@ -31,9 +31,6 @@ public class DockyardUpgradeLogic {
         handleDockyardShipClick(player, 0, release, false, 0L);
     }
 
-    /**
-     * Новый перегруженный метод — distinction block/item передаётся явно с клиента.
-     */
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release, boolean blockMode, long blockPosLong) {
         BlockEntity blockEntity = null;
         BlockPos blockPos = null;
@@ -48,9 +45,7 @@ public class DockyardUpgradeLogic {
 
         // =============== BLOCKENTITY LOGIC ===============
         if (isOpenedAsBlock) {
-            // Выпустить корабль из блока
             if (release) {
-                // Читаем слот из capability игрока, а не из блока!
                 PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
                 CompoundTag dockyardData = data.getDockyardData();
                 String key = "ship" + slotIndex;
@@ -73,7 +68,6 @@ public class DockyardUpgradeLogic {
                 return;
             }
 
-            // Проверяем наличие корабля в capability игрока, а не в блоке
             PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
             CompoundTag dockyardData = data.getDockyardData();
             String key = "ship" + slotIndex;
@@ -82,10 +76,8 @@ public class DockyardUpgradeLogic {
                 return;
             }
 
-            // Для blockentity ищем корабль строго над блоком, не рейтрейсом от игрока!
             ServerLevel serverLevel = (ServerLevel) level;
             BlockPos pos = blockEntity.getBlockPos();
-            // Важно: теперь ищем корабль вверх на 20 блоков!
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 20.0);
 
             if (ship != null) {
@@ -105,7 +97,6 @@ public class DockyardUpgradeLogic {
         }
 
         // =============== PLAYER CAPABILITY LOGIC ===============
-        // Если не blockEntity — всегда работаем с capability игрока (рюкзак из инвентаря)
         if (player != null) {
             PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
             CompoundTag dockyardData = data.getDockyardData();
@@ -160,13 +151,11 @@ public class DockyardUpgradeLogic {
             return;
         }
 
-        // Этот случай невозможен если контейнер реально открыт SophisticatedBackpacks!
         if (player != null) {
             player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_backpack_found"), true);
         }
     }
 
-    // Старая версия — для совместимости, использует reflection для distinction
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
         boolean blockMode = false;
         long blockPosLong = 0L;
@@ -255,7 +244,33 @@ public class DockyardUpgradeLogic {
         UUID uuid = UUID.randomUUID();
 
         try {
-            return VModSchematicJavaHelper.saveShipToNBT(level, player, uuid, ship, nbt);
+            boolean ok = VModSchematicJavaHelper.saveShipToNBT(level, player, uuid, ship, nbt);
+            // Сохраняем размеры в NBT (на случай если корабль будет выгружен)
+            Object vsShip = ship.getServerShip();
+            try {
+                Object aabbObj = vsShip.getClass().getMethod("getWorldAABB").invoke(vsShip);
+                if (aabbObj != null) {
+                    double minY = (double) aabbObj.getClass().getMethod("minY").invoke(aabbObj);
+                    double maxY = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
+                    double minX = (double) aabbObj.getClass().getMethod("minX").invoke(aabbObj);
+                    double maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
+                    double minZ = (double) aabbObj.getClass().getMethod("minZ").invoke(aabbObj);
+                    double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
+                    double length = maxX - minX;
+                    double width = maxZ - minZ;
+                    double height = maxY - minY;
+                    nbt.putDouble("aabb_minY", minY);
+                    nbt.putDouble("aabb_maxY", maxY);
+                    nbt.putDouble("aabb_minX", minX);
+                    nbt.putDouble("aabb_maxX", maxX);
+                    nbt.putDouble("aabb_minZ", minZ);
+                    nbt.putDouble("aabb_maxZ", maxZ);
+                    nbt.putDouble("aabb_height", height);
+                    nbt.putDouble("aabb_length", length);
+                    nbt.putDouble("aabb_width", width);
+                }
+            } catch (Exception ignored) {}
+            return ok;
         } catch (Throwable t) {
             return false;
         }
@@ -271,9 +286,8 @@ public class DockyardUpgradeLogic {
 
     /**
      * Выпустить корабль из блока-рюкзака строго над ним (block mode).
-     * Использует нижнюю точку корабля (minY) для расчёта позиции спавна:
-     * нижняя граница корабля будет находиться на 5 блоков выше рюкзака.
-     * Добавляет рейтрейс вверх на 50 блоков (если пусто — разрешает спавн) и облако частиц после спавна.
+     * Логирует ВСЕ размеры: minY, maxY, height, length, width, spawnY и прочее.
+     * Нижняя граница корабля будет находиться на 5 блоков выше рюкзака.
      */
     private static boolean releaseShipFromBlock(ServerPlayer player, BlockEntity blockEntity, CompoundTag shipNbt) {
         ServerLevel level = player.serverLevel();
@@ -283,34 +297,68 @@ public class DockyardUpgradeLogic {
         double y = blockPos.getY() + 0.5;
         double z = blockPos.getZ() + 0.5;
 
-        double shipMinY = 0.0;
-        double shipMaxY = 0.0;
-
-        // Получаем реальные размеры корабля (AABB) через reflection если возможно
+        double minY = 0.0, maxY = 0.0, minX = 0.0, maxX = 0.0, minZ = 0.0, maxZ = 0.0;
+        double length = 0.0, width = 0.0, height = 0.0;
         AABB aabb = null;
         long shipId = shipNbt.contains("vs_ship_id") ? shipNbt.getLong("vs_ship_id") : -1L;
+        boolean usedNbtFallback = false;
         if (shipId > 0) {
             Object vsShip = getVsShipById(level, shipId);
             if (vsShip != null) {
                 try {
                     Object aabbObj = vsShip.getClass().getMethod("getWorldAABB").invoke(vsShip);
-                    if (aabbObj != null) {
-                        double minY_ = (double) aabbObj.getClass().getMethod("minY").invoke(aabbObj);
-                        double maxY_ = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
-                        double minX = (double) aabbObj.getClass().getMethod("minX").invoke(aabbObj);
-                        double maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
-                        double minZ = (double) aabbObj.getClass().getMethod("minZ").invoke(aabbObj);
-                        double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
-                        aabb = new AABB(minX, minY_, minZ, maxX, maxY_, maxZ);
-                        shipMinY = minY_;
-                        shipMaxY = maxY_;
-                    }
-                } catch (Exception ignored) {}
+                    minY = (double) aabbObj.getClass().getMethod("minY").invoke(aabbObj);
+                    maxY = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
+                    minX = (double) aabbObj.getClass().getMethod("minX").invoke(aabbObj);
+                    maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
+                    minZ = (double) aabbObj.getClass().getMethod("minZ").invoke(aabbObj);
+                    maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
+
+                    length = maxX - minX;
+                    width = maxZ - minZ;
+                    height = maxY - minY;
+                    aabb = new AABB(minX, minY, minZ, maxX, maxY, maxZ);
+                } catch (Exception e) {
+                    org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic")
+                            .error("[releaseShipFromBlock] Exception in AABB logging", e);
+                }
+            } else {
+                // Попробуем достать размеры из NBT (если корабль выгружен)
+                minY = shipNbt.contains("aabb_minY") ? shipNbt.getDouble("aabb_minY") : 0.0;
+                maxY = shipNbt.contains("aabb_maxY") ? shipNbt.getDouble("aabb_maxY") : 0.0;
+                minX = shipNbt.contains("aabb_minX") ? shipNbt.getDouble("aabb_minX") : 0.0;
+                maxX = shipNbt.contains("aabb_maxX") ? shipNbt.getDouble("aabb_maxX") : 0.0;
+                minZ = shipNbt.contains("aabb_minZ") ? shipNbt.getDouble("aabb_minZ") : 0.0;
+                maxZ = shipNbt.contains("aabb_maxZ") ? shipNbt.getDouble("aabb_maxZ") : 0.0;
+                length = shipNbt.contains("aabb_length") ? shipNbt.getDouble("aabb_length") : (maxX - minX);
+                width = shipNbt.contains("aabb_width") ? shipNbt.getDouble("aabb_width") : (maxZ - minZ);
+                height = shipNbt.contains("aabb_height") ? shipNbt.getDouble("aabb_height") : (maxY - minY);
+                aabb = new AABB(minX, minY, minZ, maxX, maxY, maxZ);
+                usedNbtFallback = true;
             }
+        } else {
+            org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic")
+                    .warn("[releaseShipFromBlock] no vs_ship_id in NBT or shipId <= 0");
         }
 
+        org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic").info(
+                "[releaseShipFromBlock] SHIP_ID=" + shipId + (usedNbtFallback ? " (NBT fallback)" : ""));
+        org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic").info(
+                String.format("[releaseShipFromBlock] minY=%.3f maxY=%.3f minX=%.3f maxX=%.3f minZ=%.3f maxZ=%.3f",
+                        minY, maxY, minX, maxX, minZ, maxZ));
+        org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic").info(
+                String.format("[releaseShipFromBlock] Size: length=%.3f width=%.3f height=%.3f",
+                        length, width, height));
+        org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic").info(
+                String.format("[releaseShipFromBlock] Block center: x=%.3f y=%.3f z=%.3f", x, y, z));
+
         // Спавним так, чтобы нижняя граница корабля (minY) была ровно на 5 блоков выше рюкзака
-        double spawnY = y + 5.0 + shipMaxY;
+        double spawnY = y + 5.0 - minY;
+        org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic").info(
+                String.format("[releaseShipFromBlock] Calculated spawn: x=%.3f y=%.3f z=%.3f (spawnY formula: blockY+5.0-minY)", x, spawnY, z));
+        org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic").info(
+                String.format("[releaseShipFromBlock] --- DEBUG VARS --- minY=%.3f, maxY=%.3f, height=%.3f, length=%.3f, width=%.3f, blockY=%.3f, spawnY=%.3f", minY, maxY, height, length, width, y, spawnY));
+
         Vec3 spawnPos = new Vec3(x, spawnY, z);
 
         // 1. Рейтрейс вверх на 50 блоков
@@ -321,21 +369,23 @@ public class DockyardUpgradeLogic {
         boolean canSpawn = hit == null || hit.getType() == HitResult.Type.MISS;
         if (!canSpawn) {
             player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.spawn_blocked"), true);
+            org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic").warn("[releaseShipFromBlock] spawn blocked by raytrace");
             return false;
         }
 
         UUID uuid = UUID.randomUUID();
         boolean result = VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, spawnPos, shipNbt, true);
 
-        // 2. После успешного спавна — облако частиц (огоньки)
         if (result) {
             spawnFlameParticleCloud(level, aabb, spawnPos);
+            org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic").info("[releaseShipFromBlock] Ship spawned successfully.");
+        } else {
+            org.apache.logging.log4j.LogManager.getLogger("HeavyBullet-DockyardUpgradeLogic").warn("[releaseShipFromBlock] Ship spawn failed.");
         }
 
         return result;
     }
 
-    // Получить корабль VS по id через reflection
     private static Object getVsShipById(ServerLevel level, long shipId) {
         try {
             Class<?> pipelineClass = Class.forName("org.valkyrienskies.mod.common.VSGameUtilsKt");
@@ -352,11 +402,9 @@ public class DockyardUpgradeLogic {
         }
     }
 
-    // Спавнит облако огоньков (flame) в aabb или вокруг spawnPos, с движением вверх и разлётом, живут ~2 секунды
     private static void spawnFlameParticleCloud(ServerLevel level, @Nullable AABB aabb, Vec3 spawnPos) {
         double minX, maxX, minY, maxY, minZ, maxZ;
         if (aabb != null) {
-            // Размеры рамки: +5 блоков во все стороны от корабля
             minX = aabb.minX - 5.0; maxX = aabb.maxX + 5.0;
             minY = aabb.minY - 5.0; maxY = aabb.maxY + 5.0;
             minZ = aabb.minZ - 5.0; maxZ = aabb.maxZ + 5.0;
@@ -370,7 +418,6 @@ public class DockyardUpgradeLogic {
             double px = minX + Math.random() * (maxX - minX);
             double py = minY + Math.random() * (maxY - minY);
             double pz = minZ + Math.random() * (maxZ - minZ);
-            // Больше скорости (больше разброс и вертикальная скорость)
             double dx = (Math.random() - 0.5) * 0.55;
             double dy = 0.25 + Math.random() * 0.35;
             double dz = (Math.random() - 0.5) * 0.55;
@@ -418,7 +465,6 @@ public class DockyardUpgradeLogic {
             try {
                 ship = VModSchematicJavaHelper.findServerShip(level, pos);
             } catch (Throwable t) {
-                // ignore
             }
             if (ship != null) {
                 return ship;
@@ -427,7 +473,6 @@ public class DockyardUpgradeLogic {
         return null;
     }
 
-    // Получить или создать ForgeData/PersistentData для блока
     private static CompoundTag getOrCreatePersistentData(BlockEntity blockEntity) {
         CompoundTag beTag = blockEntity.saveWithFullMetadata();
         CompoundTag persistentData;
