@@ -211,24 +211,28 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         AABB aabb = tryGetShipAABB(vsShip);
 
         double margin = 2.0;
+        // Смещение точки назначения на полблока вниз:
         double targetX = blockPos.getX() + 0.5;
-        double targetY = blockPos.getY() + 1.2;
+        double targetY = blockPos.getY() + 0.7; // было +1.2, стало +0.7
         double targetZ = blockPos.getZ() + 0.5;
 
-        int baseCount = 40; // базовое для средней рамки
-        int particleCount = baseCount;
+        int particleCount;
         if (aabb != null) {
-            double sizeX = aabb.maxX - aabb.minX + 2*margin;
-            double sizeY = aabb.maxY - aabb.minY + 2*margin;
-            double sizeZ = aabb.maxZ - aabb.minZ + 2*margin;
+            double sizeX = aabb.maxX - aabb.minX + 2 * margin;
+            double sizeY = aabb.maxY - aabb.minY + 2 * margin;
+            double sizeZ = aabb.maxZ - aabb.minZ + 2 * margin;
+            // Новый коэффициент: для маленьких кораблей меньше, для больших больше
+            // формула: 2 частицы на кубический блок объёма, минимум 5, максимум 100
             double volume = Math.max(sizeX * sizeY * sizeZ, 1.0);
-            particleCount = (int) Math.max(6, Math.min(150, volume * 0.08)); // подстроено: 0.08 - адекватно для больших кораблей
+            particleCount = (int) Math.max(5, Math.min(100, volume * 2.0));
+        } else {
+            particleCount = 12;
         }
-        int desiredCount = (int)Math.ceil(particleCount * percent);
+        int desiredCount = (int) Math.ceil(particleCount * percent);
 
         List<ActiveParticle> list = FLYING_PARTICLES.computeIfAbsent(key, k -> new ArrayList<>());
 
-        // Добавляем частицы, если их меньше чем нужно
+        // Создаём новые частицы, если их меньше чем нужно
         if (aabb != null) {
             double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
             double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
@@ -263,13 +267,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             }
         }
 
-        // Апдейт и рендер частиц
+        // Апдейт и рендер частиц (только движение, не респавн!)
         Iterator<ActiveParticle> iter = list.iterator();
         while (iter.hasNext()) {
             ActiveParticle p = iter.next();
             p.update();
-            // Используем скалка (SCALE) частицы
-            level.sendParticles(ParticleTypes.SCRAPE, p.x, p.y, p.z, 1, 0, 0, 0, 0);
+            // Используем частицы эндера (END_ROD)
+            level.sendParticles(ParticleTypes.END_ROD, p.x, p.y, p.z, 1, 0, 0, 0, 0);
             if (p.isArrived()) {
                 iter.remove();
             }
