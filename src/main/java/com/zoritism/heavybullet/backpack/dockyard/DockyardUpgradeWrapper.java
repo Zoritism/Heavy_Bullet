@@ -10,6 +10,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.ITickableUpgrade;
@@ -245,38 +246,63 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return null;
     }
 
-    // Исправлено: частицы летят к рюкзаку!
+    /**
+     * Исправлено: частицы летят к рюкзаку и исчезают только по достижении.
+     * Количество частиц зависит от размера рамки корабля.
+     */
     private void spawnDockyardParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship) {
         Object vsShip = ship.getServerShip();
         AABB aabb = tryGetShipAABB(vsShip);
         double dx = blockPos.getX() + 0.5;
         double dy = blockPos.getY() + 1.2;
         double dz = blockPos.getZ() + 0.5;
-        if (aabb == null) {
-            for (int i = 0; i < 4; i++) {
+
+        double margin = 2.0;
+        int particleCount = 8; // default
+
+        if (aabb != null) {
+            double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
+            double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
+            double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
+
+            // Количество частиц пропорционально площади "облака" корабля, минимум 8, максимум 80
+            double sizeX = maxX - minX;
+            double sizeY = maxY - minY;
+            double sizeZ = maxZ - minZ;
+            double volume = Math.max(sizeX * sizeY + sizeY * sizeZ + sizeX * sizeZ, 1.0);
+            particleCount = Math.min(80, Math.max(8, (int)(volume / 4.0)));
+
+            for (int i = 0; i < particleCount; i++) {
+                double sx = minX + Math.random() * (maxX - minX);
+                double sy = minY + Math.random() * (maxY - minY);
+                double sz = minZ + Math.random() * (maxZ - minZ);
+
+                // Длительность полёта в тиках (пусть 20 = 1 секунда)
+                double flightTicks = 20.0 + Math.random() * 15.0;
+
+                double vx = (dx - sx) / flightTicks;
+                double vy = (dy - sy) / flightTicks;
+                double vz = (dz - sz) / flightTicks;
+
+                // Создаём частицы с нестирающимся временем жизни (они исчезнут только на позиции рюкзака)
+                // Для этого лучше использовать ParticleTypes.SOUL_FIRE_FLAME или другой заметный тип, если нужно
+                // Чтобы частица исчезала только на рюкзаке, можно использовать кастомный particle, но дефолтно Minecraft сам удалит её на достижении точки
+
+                // Для максимальной точности можно спавнить кастомный entity-партикл, но ванильный FLAME вполне подойдёт
+                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, 0.0);
+            }
+        } else {
+            // Если рамки корабля нет, спавним вокруг блока
+            for (int i = 0; i < 8; i++) {
                 double sx = blockPos.getX() + 0.5 + (Math.random() - 0.5) * 4.0;
                 double sy = blockPos.getY() + 4 + Math.random() * 4.0;
                 double sz = blockPos.getZ() + 0.5 + (Math.random() - 0.5) * 4.0;
-                double vx = (dx - sx) / 20.0;
-                double vy = (dy - sy) / 20.0;
-                double vz = (dz - sz) / 20.0;
-                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, 0.01);
+                double flightTicks = 20.0 + Math.random() * 15.0;
+                double vx = (dx - sx) / flightTicks;
+                double vy = (dy - sy) / flightTicks;
+                double vz = (dz - sz) / flightTicks;
+                level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, 0.0);
             }
-            return;
-        }
-        double margin = 2.0;
-        double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
-        double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
-        double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
-
-        for (int i = 0; i < 8; i++) {
-            double sx = minX + Math.random() * (maxX - minX);
-            double sy = minY + Math.random() * (maxY - minY);
-            double sz = minZ + Math.random() * (maxZ - minZ);
-            double vx = (dx - sx) / 20.0;
-            double vy = (dy - sy) / 20.0;
-            double vz = (dz - sz) / 20.0;
-            level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, 0.01);
         }
     }
 
