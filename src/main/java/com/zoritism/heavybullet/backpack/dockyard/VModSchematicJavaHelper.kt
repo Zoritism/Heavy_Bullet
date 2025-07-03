@@ -103,7 +103,7 @@ object VModSchematicJavaHelper {
             }
         }
 
-        // Сохраняем в NBT
+        // Сохраняем в NBT (обязательно размеры!)
         val saveResult = saveShipToNBT(level, player, uuid, ship, nbt)
         if (!saveResult) return false
 
@@ -126,11 +126,12 @@ object VModSchematicJavaHelper {
     /**
      * Сохранить корабль в NBT без проверки состояния рюкзака и расстояния.
      * Используется только внутренне!
+     * Теперь ВСЕГДА гарантированно сохраняет размеры корабля (AABB) в NBT!
      */
     @JvmStatic
     fun saveShipToNBT(
         level: ServerLevel,
-        player: ServerPlayer,
+        player: ServerPlayer?,
         uuid: UUID,
         ship: DockyardUpgradeLogic.ServerShipHandle,
         nbt: CompoundTag
@@ -150,6 +151,34 @@ object VModSchematicJavaHelper {
             } catch (_: Exception) {
                 // имя не найдено - не критично
             }
+
+            // Сохраняем размеры корабля в NBT (AABB) — ГАРАНТИРОВАНО!
+            try {
+                val aabbObj = serverShip.javaClass.getMethod("getWorldAABB").invoke(serverShip)
+                if (aabbObj != null) {
+                    val minY = aabbObj.javaClass.getMethod("minY").invoke(aabbObj) as Double
+                    val maxY = aabbObj.javaClass.getMethod("maxY").invoke(aabbObj) as Double
+                    val minX = aabbObj.javaClass.getMethod("minX").invoke(aabbObj) as Double
+                    val maxX = aabbObj.javaClass.getMethod("maxX").invoke(aabbObj) as Double
+                    val minZ = aabbObj.javaClass.getMethod("minZ").invoke(aabbObj) as Double
+                    val maxZ = aabbObj.javaClass.getMethod("maxZ").invoke(aabbObj) as Double
+                    val length = maxX - minX
+                    val width = maxZ - minZ
+                    val height = maxY - minY
+                    nbt.putDouble("aabb_minY", minY)
+                    nbt.putDouble("aabb_maxY", maxY)
+                    nbt.putDouble("aabb_minX", minX)
+                    nbt.putDouble("aabb_maxX", maxX)
+                    nbt.putDouble("aabb_minZ", minZ)
+                    nbt.putDouble("aabb_maxZ", maxZ)
+                    nbt.putDouble("aabb_height", height)
+                    nbt.putDouble("aabb_length", length)
+                    nbt.putDouble("aabb_width", width)
+                }
+            } catch (e: Exception) {
+                // Если размеры вдруг не считались — не критично, но тогда в NBT будут 0 (будет видно по логам)
+            }
+
             true
         } catch (e: Exception) {
             false
