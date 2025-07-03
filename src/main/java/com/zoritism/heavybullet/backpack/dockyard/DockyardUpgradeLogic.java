@@ -50,13 +50,16 @@ public class DockyardUpgradeLogic {
         if (isOpenedAsBlock) {
             // Выпустить корабль из блока
             if (release) {
-                // --- FIX: читаем слот из capability игрока, а не из блока
+                // Читаем слот из capability игрока, а не из блока!
                 PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
                 CompoundTag dockyardData = data.getDockyardData();
                 String key = "ship" + slotIndex;
                 if (dockyardData.contains(key)) {
                     CompoundTag shipNbt = dockyardData.getCompound(key);
-                    boolean restored = releaseShipFromBlock(player, blockEntity, shipNbt);
+                    boolean restored = false;
+                    if (shipNbt != null && !shipNbt.isEmpty()) {
+                        restored = releaseShipFromBlock(player, blockEntity, shipNbt);
+                    }
                     if (restored) {
                         dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
@@ -70,7 +73,7 @@ public class DockyardUpgradeLogic {
                 return;
             }
 
-            // В блоке уже есть корабль (FIX: проверять capability игрока)
+            // Проверяем наличие корабля в capability игрока, а не в блоке
             PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
             CompoundTag dockyardData = data.getDockyardData();
             String key = "ship" + slotIndex;
@@ -119,7 +122,10 @@ public class DockyardUpgradeLogic {
             if (release) {
                 if (dockyardData.contains(key)) {
                     CompoundTag shipNbt = dockyardData.getCompound(key);
-                    boolean restored = spawnShipFromNbt(player, shipNbt);
+                    boolean restored = false;
+                    if (shipNbt != null && !shipNbt.isEmpty()) {
+                        restored = spawnShipFromNbt(player, shipNbt);
+                    }
                     if (restored) {
                         dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
