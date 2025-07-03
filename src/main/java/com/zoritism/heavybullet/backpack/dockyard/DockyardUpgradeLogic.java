@@ -284,6 +284,7 @@ public class DockyardUpgradeLogic {
         double z = blockPos.getZ() + 0.5;
 
         double shipMinY = 0.0;
+        double shipMaxY = 0.0;
 
         // Получаем реальные размеры корабля (AABB) через reflection если возможно
         AABB aabb = null;
@@ -302,13 +303,14 @@ public class DockyardUpgradeLogic {
                         double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
                         aabb = new AABB(minX, minY_, minZ, maxX, maxY_, maxZ);
                         shipMinY = minY_;
+                        shipMaxY = maxY_;
                     }
                 } catch (Exception ignored) {}
             }
         }
 
         // Спавним так, чтобы нижняя граница корабля (minY) была ровно на 5 блоков выше рюкзака
-        double spawnY = y + 5.0 + shipMinY;
+        double spawnY = y + 5.0 + shipMaxY;
         Vec3 spawnPos = new Vec3(x, spawnY, z);
 
         // 1. Рейтрейс вверх на 50 блоков
