@@ -11,6 +11,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.particles.SimpleParticleType;
 import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.ITickableUpgrade;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeWrapperBase;
@@ -38,6 +39,9 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     // Для анимированных частиц, ключ - blockPos.asLong()
     private static final Map<Long, List<ActiveParticle>> FLYING_PARTICLES = new HashMap<>();
     private static final Map<Long, ParticleProcessState> PARTICLE_PROCESS = new HashMap<>();
+
+    // Используем частицы эндермена
+    private static final SimpleParticleType ENDERMAN_PARTICLE = ParticleTypes.PORTAL;
 
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
@@ -221,18 +225,24 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             double sizeX = aabb.maxX - aabb.minX + 2 * margin;
             double sizeY = aabb.maxY - aabb.minY + 2 * margin;
             double sizeZ = aabb.maxZ - aabb.minZ + 2 * margin;
-            // Новый коэффициент: для маленьких кораблей меньше, для больших больше
-            // формула: 2 частицы на кубический блок объёма, минимум 5, максимум 100
+            // Геометрическая прогрессия: particleCount = min + (max-min)*((volume/vol0)^exp)
+            // vol0 = средний размер (например, 100), exp≈0.7 (не слишком резко)
             double volume = Math.max(sizeX * sizeY * sizeZ, 1.0);
-            particleCount = (int) Math.max(5, Math.min(100, volume * 2.0));
+            double minParticles = 6;
+            double maxParticles = 90;
+            double vol0 = 100;
+            double exp = 0.7;
+            double norm = Math.pow(volume / vol0, exp);
+            norm = Math.max(0, Math.min(1, norm));
+            particleCount = (int) (minParticles + (maxParticles - minParticles) * norm);
         } else {
-            particleCount = 12;
+            particleCount = 8;
         }
         int desiredCount = (int) Math.ceil(particleCount * percent);
 
         List<ActiveParticle> list = FLYING_PARTICLES.computeIfAbsent(key, k -> new ArrayList<>());
 
-        // Создаём новые частицы, если их меньше чем нужно
+        // Добавляем новые частицы, если их меньше чем нужно
         if (aabb != null) {
             double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
             double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
@@ -272,8 +282,8 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         while (iter.hasNext()) {
             ActiveParticle p = iter.next();
             p.update();
-            // Используем частицы эндера (END_ROD)
-            level.sendParticles(ParticleTypes.END_ROD, p.x, p.y, p.z, 1, 0, 0, 0, 0);
+            // Используем частицы эндермена (PORTAL)
+            level.sendParticles(ENDERMAN_PARTICLE, p.x, p.y, p.z, 1, 0, 0, 0, 0);
             if (p.isArrived()) {
                 iter.remove();
             }
