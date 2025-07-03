@@ -80,7 +80,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 }
 
                 int animationTicks = Math.min(ticks, ANIMATION_TICKS);
-                double process = animationTicks / (double) ANIMATION_TICKS; // 0.0 -> 1.0
+                double process = animationTicks / (double) ANIMATION_TICKS;
 
                 tickProcessParticles(serverLevel, blockPos, ship, process);
 
@@ -144,8 +144,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private void tickProcessParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
         long key = blockPos.asLong();
 
-        // Количество и скорость
-        double minPercent = 0.1; // 10%
+        double minPercent = 0.1;
         double maxPercent = 1.0;
         double percent = minPercent + (maxPercent - minPercent) * process;
 
@@ -166,7 +165,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             double sizeX = aabb.maxX - aabb.minX + 2 * margin;
             double sizeY = aabb.maxY - aabb.minY + 2 * margin;
             double sizeZ = aabb.maxZ - aabb.minZ + 2 * margin;
-            // Геометрическая прогрессия: particleCount = min + (max-min)*((volume/vol0)^exp)
             double volume = Math.max(sizeX * sizeY * sizeZ, 1.0);
             double minParticles = 4;
             double maxParticles = 90;
@@ -202,7 +200,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 double life = Math.max(1.0, len / speed);
 
-                // Вектор движения частицы
                 double vx = dx / life;
                 double vy = dy / life;
                 double vz = dz / life;
@@ -237,8 +234,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         while (iter.hasNext()) {
             ActiveParticle p = iter.next();
             p.update();
-            // ВНИМАНИЕ: чтобы частица летела к рюкзаку, нужно использовать sendParticles с нулевой скоростью!
-            // Скорость задаётся только вектором движения и обновлением позиции p.x/p.y/p.z
+            // Портал частица с нулевой скоростью, позиция управляется логикой
             level.sendParticles(ParticleTypes.PORTAL, p.x, p.y, p.z, 1, 0, 0, 0, 0);
             if (p.isArrived()) {
                 iter.remove();
@@ -384,9 +380,9 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double minX = (double) aabbObj.getClass().getMethod("minX").invoke(aabbObj);
                 double minY = (double) aabbObj.getClass().getMethod("minY").invoke(aabbObj);
                 double minZ = (double) aabbObj.getClass().getMethod("minZ").invoke(aabbObj);
-                double maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
-                double maxY = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
-                double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
+                double maxX = (double) aabbObj.getClass().getMethod("getMaxX").invoke(aabbObj);
+                double maxY = (double) aabbObj.getClass().getMethod("getMaxY").invoke(aabbObj);
+                double maxZ = (double) aabbObj.getClass().getMethod("getMaxZ").invoke(aabbObj);
                 return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
             }
         } catch (Exception e) {
