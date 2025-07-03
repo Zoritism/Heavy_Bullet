@@ -271,7 +271,8 @@ public class DockyardUpgradeLogic {
 
     /**
      * Выпустить корабль из блока-рюкзака строго над ним (block mode).
-     * Использует точную координату для спавна!
+     * Использует нижнюю точку корабля (minY) для расчёта позиции спавна:
+     * нижняя граница корабля будет находиться на 5 блоков выше рюкзака.
      * Добавляет рейтрейс вверх на 50 блоков (если пусто — разрешает спавн) и облако частиц после спавна.
      */
     private static boolean releaseShipFromBlock(ServerPlayer player, BlockEntity blockEntity, CompoundTag shipNbt) {
@@ -283,13 +284,6 @@ public class DockyardUpgradeLogic {
         double z = blockPos.getZ() + 0.5;
 
         double shipMinY = 0.0;
-        double shipMaxY = 0.0;
-        double shipHeight = 1.0;
-
-        // Получаем высоту корабля из NBT если есть (для совместимости)
-        if (shipNbt.contains("vs_ship_height")) {
-            shipHeight = shipNbt.getDouble("vs_ship_height");
-        }
 
         // Получаем реальные размеры корабля (AABB) через reflection если возможно
         AABB aabb = null;
@@ -308,14 +302,12 @@ public class DockyardUpgradeLogic {
                         double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
                         aabb = new AABB(minX, minY_, minZ, maxX, maxY_, maxZ);
                         shipMinY = minY_;
-                        shipMaxY = maxY_;
-                        shipHeight = maxY_ - minY_;
                     }
                 } catch (Exception ignored) {}
             }
         }
 
-        // Высота спавна: нижняя граница корабля на 5 блоков выше рюкзака
+        // Спавним так, чтобы нижняя граница корабля (minY) была ровно на 5 блоков выше рюкзака
         double spawnY = y + 5.0 - shipMinY;
         Vec3 spawnPos = new Vec3(x, spawnY, z);
 
