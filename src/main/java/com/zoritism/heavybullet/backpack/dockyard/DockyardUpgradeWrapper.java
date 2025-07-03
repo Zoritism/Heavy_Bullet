@@ -132,11 +132,12 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
 
     /**
      * Использует частицы FLAME: все летят к одной точке (центр блока рюкзака, но ниже на 0.5 блока).
+     * Вектор направления (vx, vy, vz) строго нормализован — "пинок" к цели.
      */
     private void tickProcessParticlesReal(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
         // Целевая точка: центр блока рюкзака, но ниже на 0.5 блока
         double targetX = blockPos.getX() + 0.5;
-        double targetY = blockPos.getY() + 0.0; // 0.5 ниже центра (0.5 + (-0.5))
+        double targetY = blockPos.getY(); // именно +0.0 — то есть на полблока ниже центра блока
         double targetZ = blockPos.getZ() + 0.5;
 
         Object vsShip = ship.getServerShip();
@@ -179,20 +180,23 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double sy = minY + Math.random() * (maxY - minY);
                 double sz = minZ + Math.random() * (maxZ - minZ);
 
-                // Вектор только в одну точку
+                // Вектор направления от источника к цели
                 double dx = targetX - sx;
                 double dy = targetY - sy;
                 double dz = targetZ - sz;
-                double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (len < 0.01) len = 0.01;
+                double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (distance < 0.01) distance = 0.01;
 
-                double vx = dx / len;
-                double vy = dy / len;
-                double vz = dz / len;
+                // Именно нормализованный вектор — только направление, длина = 1
+                double vx = dx / distance;
+                double vy = dy / distance;
+                double vz = dz / distance;
 
+                // Модуль скорости: частица долетит до цели примерно за lifetime тиков
                 double lifetimeTicks = 24.0 + Math.random() * 16.0;
-                double speed = len / lifetimeTicks;
+                double speed = distance / lifetimeTicks;
 
+                // Дать частице "пинок" строго в цель!
                 level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, speed);
             }
         } else {
@@ -204,19 +208,18 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double sy = minY + Math.random() * (maxY - minY);
                 double sz = minZ + Math.random() * (maxZ - minZ);
 
-                // Вектор только в одну точку
                 double dx = targetX - sx;
                 double dy = targetY - sy;
                 double dz = targetZ - sz;
-                double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (len < 0.01) len = 0.01;
+                double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (distance < 0.01) distance = 0.01;
 
-                double vx = dx / len;
-                double vy = dy / len;
-                double vz = dz / len;
+                double vx = dx / distance;
+                double vy = dy / distance;
+                double vz = dz / distance;
 
                 double lifetimeTicks = 24.0 + Math.random() * 16.0;
-                double speed = len / lifetimeTicks;
+                double speed = distance / lifetimeTicks;
 
                 level.sendParticles(ParticleTypes.FLAME, sx, sy, sz, 1, vx, vy, vz, speed);
             }
