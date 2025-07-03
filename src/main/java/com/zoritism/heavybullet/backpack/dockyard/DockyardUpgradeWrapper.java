@@ -175,15 +175,16 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
             double sizeY = aabb.maxY - aabb.minY + 2 * margin;
             double sizeZ = aabb.maxZ - aabb.minZ + 2 * margin;
             // Геометрическая прогрессия: particleCount = min + (max-min)*((volume/vol0)^exp)
+            // Для больших кораблей экспоненциальный рост, для маленьких очень мало (от ~4 до ~90)
             double volume = Math.max(sizeX * sizeY * sizeZ, 1.0);
-            double minParticles = 6;
+            double minParticles = 4;
             double maxParticles = 90;
-            double vol0 = 100;
-            double exp = 0.7;
+            double vol0 = 40; // меньше vol0 — меньше частиц, больше vol0 — больше частиц
+            double exp = 1.1; // экспонента больше 1 — резче рост
             double norm = Math.pow(Math.min(volume / vol0, 1.0), exp);
             particleCount = (int) (minParticles + (maxParticles - minParticles) * norm);
         } else {
-            particleCount = 8;
+            particleCount = 4;
         }
         int desiredCount = (int) Math.ceil(particleCount * percent);
 
@@ -205,7 +206,7 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 double life = Math.max(1.0, len / speed);
 
-                // Частьцы теперь двигаются по вектору!
+                // Частьцы двигаются по вектору!
                 double vx = dx / life;
                 double vy = dy / life;
                 double vz = dz / life;
