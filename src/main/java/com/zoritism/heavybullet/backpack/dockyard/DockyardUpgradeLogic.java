@@ -50,12 +50,17 @@ public class DockyardUpgradeLogic {
         if (isOpenedAsBlock) {
             // Выпустить корабль из блока
             if (release) {
-                CompoundTag shipNbt = DockyardDataHelper.getShipFromBlockSlot(blockEntity, slotIndex);
-                if (shipNbt != null) {
+                // --- FIX: читаем слот из capability игрока, а не из блока
+                PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
+                CompoundTag dockyardData = data.getDockyardData();
+                String key = "ship" + slotIndex;
+                if (dockyardData.contains(key)) {
+                    CompoundTag shipNbt = dockyardData.getCompound(key);
                     boolean restored = releaseShipFromBlock(player, blockEntity, shipNbt);
                     if (restored) {
-                        DockyardDataHelper.clearShipFromBlockSlot(blockEntity, slotIndex);
+                        dockyardData.remove(key);
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.ship_released"), true);
+                        syncDockyardToClient(player);
                     } else {
                         player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.restore_failed"), true);
                     }
@@ -65,8 +70,11 @@ public class DockyardUpgradeLogic {
                 return;
             }
 
-            // В блоке уже есть корабль
-            if (DockyardDataHelper.hasShipInBlockSlot(blockEntity, slotIndex)) {
+            // В блоке уже есть корабль (FIX: проверять capability игрока)
+            PlayerDockyardData data = PlayerDockyardDataUtil.getOrCreate(player);
+            CompoundTag dockyardData = data.getDockyardData();
+            String key = "ship" + slotIndex;
+            if (dockyardData.contains(key)) {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.already_has_ship"), true);
                 return;
             }
