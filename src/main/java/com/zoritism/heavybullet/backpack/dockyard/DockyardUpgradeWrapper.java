@@ -5,7 +5,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -35,9 +34,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
     private static final int SHIP_RAY_DIST = 15;
 
-    // Ключ: blockPos.asLong(), Value: List<ActiveParticle>
-    private static final Map<Long, List<ActiveParticle>> FLYING_PARTICLES = new HashMap<>();
-
     protected DockyardUpgradeWrapper(IStorageWrapper storageWrapper, ItemStack upgrade, Consumer<ItemStack> upgradeSaveHandler) {
         super(storageWrapper, upgrade, upgradeSaveHandler);
     }
@@ -49,7 +45,6 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         if (entity == null && blockPos != null) {
             BlockEntity be = getStorageBlockEntity(level, blockPos);
             if (be == null) {
-                cleanupFlyingParticles(blockPos);
                 return;
             }
             CompoundTag tag = getPersistentData(be);
@@ -75,14 +70,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 if (!shipValid) {
                     LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Ship not found or ID mismatch at process end. Aborting insert for slot {}", slot);
                     clearProcess(tag, be);
-                    cleanupFlyingParticles(blockPos);
                     return;
                 }
 
                 int animationTicks = Math.min(ticks, ANIMATION_TICKS);
                 double process = animationTicks / (double) ANIMATION_TICKS;
 
-                tickProcessParticles(serverLevel, blockPos, ship, process);
+                tickProcessParticlesReal(serverLevel, blockPos, ship, process);
 
                 if (ticks >= ANIMATION_TICKS) {
                     CompoundTag shipNbt = new CompoundTag();
@@ -131,65 +125,60 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                     }
 
                     clearProcess(tag, be);
-                    cleanupFlyingParticles(blockPos);
                 }
-            } else {
-                cleanupFlyingParticles(blockPos);
             }
         }
     }
 
-    // ---------------- ПАРТИКЛЫ ----------------
-
-    private void tickProcessParticles(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
-        long key = blockPos.asLong();
-
-        double minPercent = 0.1;
-        double maxPercent = 1.0;
-        double percent = minPercent + (maxPercent - minPercent) * process;
-
-        double minSpeed = 0.5;
-        double maxSpeed = 2.0;
-        double speed = minSpeed + (maxSpeed - minSpeed) * process;
-
-        Object vsShip = ship.getServerShip();
-        AABB aabb = tryGetShipAABB(vsShip);
-
-        double margin = 2.0;
+    /**
+     * Новый реальный способ спавна частиц — частицы летят по вектору (dx,dy,dz) с заданной скоростью speed.
+     */
+    private void tickProcessParticlesReal(ServerLevel level, BlockPos blockPos, DockyardUpgradeLogic.ServerShipHandle ship, double process) {
+        // Определяем центр рюкзака (точка назначения)
         double targetX = blockPos.getX() + 0.5;
         double targetY = blockPos.getY() + 0.7;
         double targetZ = blockPos.getZ() + 0.5;
 
+        // Определяем AABB корабля
+        Object vsShip = ship.getServerShip();
+        AABB aabb = tryGetShipAABB(vsShip);
+
+        double margin = 2.0;
+
+        // Количество частиц: геометрическая прогрессия с коэффициентом для больших кораблей
         int particleCount;
         if (aabb != null) {
             double sizeX = aabb.maxX - aabb.minX + 2 * margin;
             double sizeY = aabb.maxY - aabb.minY + 2 * margin;
             double sizeZ = aabb.maxZ - aabb.minZ + 2 * margin;
             double volume = Math.max(sizeX * sizeY * sizeZ, 1.0);
+
             double minParticles = 4;
             double maxParticles = 90;
-            double vol0 = 40;
+            double vol0 = 125.0; // 5x5x5
+            double maxVolumeForDouble = 125000.0; // 50x50x50
             double exp = 1.1;
+
+            double multiplier = 1.0;
+            if (volume > vol0) {
+                multiplier += Math.min(1.0, (volume - vol0) / (maxVolumeForDouble - vol0));
+            }
             double norm = Math.pow(Math.min(volume / vol0, 1.0), exp);
-            particleCount = (int) (minParticles + (maxParticles - minParticles) * norm);
+            particleCount = (int) ((minParticles + (maxParticles - minParticles) * norm) * multiplier);
         } else {
             particleCount = 4;
         }
-        int desiredCount = (int) Math.ceil(particleCount * percent);
 
-        List<ActiveParticle> list = FLYING_PARTICLES.computeIfAbsent(key, k -> new ArrayList<>());
+        // Мягко наращиваем количество частиц по мере process (чтобы не сразу все)
+        double minPercent = 0.1, maxPercent = 1.0;
+        double percent = minPercent + (maxPercent - minPercent) * process;
+        int countThisTick = (int) Math.ceil(particleCount * percent);
 
-        // УДАЛЯЕМ лишние частицы, если их стало больше, чем нужно (когда уменьшается process)
-        while (list.size() > desiredCount) {
-            list.remove(0);
-        }
-
-        // ДОБАВЛЯЕМ новые частицы, если их меньше чем нужно
         if (aabb != null) {
             double minX = aabb.minX - margin, maxX = aabb.maxX + margin;
             double minY = aabb.minY - margin, maxY = aabb.maxY + margin;
             double minZ = aabb.minZ - margin, maxZ = aabb.maxZ + margin;
-            while (list.size() < desiredCount) {
+            for (int i = 0; i < countThisTick; i++) {
                 double sx = minX + Math.random() * (maxX - minX);
                 double sy = minY + Math.random() * (maxY - minY);
                 double sz = minZ + Math.random() * (maxZ - minZ);
@@ -198,19 +187,25 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double dy = targetY - sy;
                 double dz = targetZ - sz;
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                double life = Math.max(1.0, len / speed);
 
-                double vx = dx / life;
-                double vy = dy / life;
-                double vz = dz / life;
+                if (len < 0.01) len = 0.01; // на всякий случай
 
-                list.add(new ActiveParticle(sx, sy, sz, vx, vy, vz, life));
+                // Вектор направления
+                double vx = dx / len;
+                double vy = dy / len;
+                double vz = dz / len;
+
+                // speed подбирается так, чтобы частица пролетела путь за 0.8-1.2 сек
+                double lifetimeTicks = 24.0 + Math.random() * 16.0; // 1.2 сек @20tps
+                double speed = len / lifetimeTicks;
+
+                level.sendParticles(ParticleTypes.PORTAL, sx, sy, sz, 1, vx, vy, vz, speed);
             }
         } else {
             double minX = blockPos.getX() - 2, maxX = blockPos.getX() + 2;
             double minY = blockPos.getY() + 2, maxY = blockPos.getY() + 6;
             double minZ = blockPos.getZ() - 2, maxZ = blockPos.getZ() + 2;
-            while (list.size() < desiredCount) {
+            for (int i = 0; i < countThisTick; i++) {
                 double sx = minX + Math.random() * (maxX - minX);
                 double sy = minY + Math.random() * (maxY - minY);
                 double sz = minZ + Math.random() * (maxZ - minZ);
@@ -219,117 +214,19 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double dy = targetY - sy;
                 double dz = targetZ - sz;
                 double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                double life = Math.max(1.0, len / speed);
 
-                double vx = dx / life;
-                double vy = dy / life;
-                double vz = dz / life;
+                if (len < 0.01) len = 0.01;
 
-                list.add(new ActiveParticle(sx, sy, sz, vx, vy, vz, life));
+                double vx = dx / len;
+                double vy = dy / len;
+                double vz = dz / len;
+
+                double lifetimeTicks = 24.0 + Math.random() * 16.0;
+                double speed = len / lifetimeTicks;
+
+                level.sendParticles(ParticleTypes.PORTAL, sx, sy, sz, 1, vx, vy, vz, speed);
             }
         }
-
-        // ДВИГАЕМ И РЕНДЕРИМ частицы (каждая частица живет и летит по своему вектору)
-        Iterator<ActiveParticle> iter = list.iterator();
-        while (iter.hasNext()) {
-            ActiveParticle p = iter.next();
-            p.update();
-            // Портал частица с нулевой скоростью, позиция управляется логикой
-            level.sendParticles(ParticleTypes.PORTAL, p.x, p.y, p.z, 1, 0, 0, 0, 0);
-            if (p.isArrived()) {
-                iter.remove();
-            }
-        }
-    }
-
-    private void cleanupFlyingParticles(BlockPos blockPos) {
-        FLYING_PARTICLES.remove(blockPos.asLong());
-    }
-
-    private static class ActiveParticle {
-        double x, y, z;
-        final double vx, vy, vz;
-        final double lifeTicks;
-        int age;
-
-        public ActiveParticle(double sx, double sy, double sz, double vx, double vy, double vz, double lifeTicks) {
-            this.x = sx; this.y = sy; this.z = sz;
-            this.vx = vx; this.vy = vy; this.vz = vz;
-            this.lifeTicks = lifeTicks;
-            this.age = 0;
-        }
-        public void update() {
-            if (!isArrived()) {
-                this.x += vx;
-                this.y += vy;
-                this.z += vz;
-            }
-            age++;
-        }
-        public boolean isArrived() {
-            return age >= lifeTicks;
-        }
-    }
-
-    // ---- остальной код без изменений ----
-    public IStorageWrapper getStorageWrapper() {
-        return this.storageWrapper;
-    }
-
-    @Nullable
-    public ItemStack getStorageItemStack() {
-        if (storageWrapper == null) return ItemStack.EMPTY;
-        try {
-            Method m = storageWrapper.getClass().getMethod("getStack");
-            Object stack = m.invoke(storageWrapper);
-            if (stack instanceof ItemStack s && !s.isEmpty()) {
-                return s;
-            }
-        } catch (NoSuchMethodException e) {
-            try {
-                Method m2 = storageWrapper.getClass().getMethod("getStorage");
-                Object stack = m2.invoke(storageWrapper);
-                if (stack instanceof ItemStack s && !s.isEmpty()) {
-                    return s;
-                }
-            } catch (NoSuchMethodException ignored) {
-            } catch (Exception ex) {
-            }
-        } catch (Exception e) {
-        }
-        return ItemStack.EMPTY;
-    }
-
-    @Nullable
-    public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
-        if (level == null || pos == null) return null;
-        BlockEntity be = level.getBlockEntity(pos);
-        return (be != null && !be.isRemoved()) ? be : null;
-    }
-
-    public static void startInsertShipProcess(BlockEntity be, int slot, long shipId, UUID playerUuid) {
-        CompoundTag tag = getPersistentDataStatic(be);
-        tag.putBoolean(NBT_PROCESS_ACTIVE, true);
-        tag.putInt(NBT_PROCESS_TICKS, 0);
-        tag.putLong(NBT_PROCESS_SHIP_ID, shipId);
-        tag.putInt(NBT_PROCESS_SLOT, slot);
-        if (playerUuid != null) {
-            tag.putUUID(NBT_PROCESS_PLAYER_UUID, playerUuid);
-        }
-        be.setChanged();
-    }
-
-    public static void startInsertShipProcess(BlockEntity be, int slot, long shipId) {
-        startInsertShipProcess(be, slot, shipId, null);
-    }
-
-    private void clearProcess(CompoundTag tag, BlockEntity be) {
-        tag.putBoolean(NBT_PROCESS_ACTIVE, false);
-        tag.putInt(NBT_PROCESS_TICKS, 0);
-        tag.putLong(NBT_PROCESS_SHIP_ID, 0L);
-        tag.putInt(NBT_PROCESS_SLOT, -1);
-        tag.remove(NBT_PROCESS_PLAYER_UUID);
-        be.setChanged();
     }
 
     private CompoundTag getPersistentData(BlockEntity blockEntity) {
@@ -356,7 +253,63 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
         return new CompoundTag();
     }
 
+    private void clearProcess(CompoundTag tag, BlockEntity be) {
+        tag.putBoolean(NBT_PROCESS_ACTIVE, false);
+        tag.putInt(NBT_PROCESS_TICKS, 0);
+        tag.putLong(NBT_PROCESS_SHIP_ID, 0L);
+        tag.putInt(NBT_PROCESS_SLOT, -1);
+        tag.remove(NBT_PROCESS_PLAYER_UUID);
+        be.setChanged();
+    }
+
     private void syncBackpackShipsToBlock(BlockEntity be) {}
+
+    @Nullable
+    public BlockEntity getStorageBlockEntity(Level level, BlockPos pos) {
+        if (level == null || pos == null) return null;
+        BlockEntity be = level.getBlockEntity(pos);
+        return (be != null && !be.isRemoved()) ? be : null;
+    }
+
+    @Nullable
+    public ItemStack getStorageItemStack() {
+        if (storageWrapper == null) return ItemStack.EMPTY;
+        try {
+            Method m = storageWrapper.getClass().getMethod("getStack");
+            Object stack = m.invoke(storageWrapper);
+            if (stack instanceof ItemStack s && !s.isEmpty()) {
+                return s;
+            }
+        } catch (NoSuchMethodException e) {
+            try {
+                Method m2 = storageWrapper.getClass().getMethod("getStorage");
+                Object stack = m2.invoke(storageWrapper);
+                if (stack instanceof ItemStack s && !s.isEmpty()) {
+                    return s;
+                }
+            } catch (NoSuchMethodException ignored) {
+            } catch (Exception ex) {
+            }
+        } catch (Exception e) {
+        }
+        return ItemStack.EMPTY;
+    }
+
+    public static void startInsertShipProcess(BlockEntity be, int slot, long shipId, UUID playerUuid) {
+        CompoundTag tag = getPersistentDataStatic(be);
+        tag.putBoolean(NBT_PROCESS_ACTIVE, true);
+        tag.putInt(NBT_PROCESS_TICKS, 0);
+        tag.putLong(NBT_PROCESS_SHIP_ID, shipId);
+        tag.putInt(NBT_PROCESS_SLOT, slot);
+        if (playerUuid != null) {
+            tag.putUUID(NBT_PROCESS_PLAYER_UUID, playerUuid);
+        }
+        be.setChanged();
+    }
+
+    public static void startInsertShipProcess(BlockEntity be, int slot, long shipId) {
+        startInsertShipProcess(be, slot, shipId, null);
+    }
 
     @Nullable
     private ItemStack getBackpackItemFromBlockEntity(BlockEntity be) {
@@ -380,13 +333,17 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 double minX = (double) aabbObj.getClass().getMethod("minX").invoke(aabbObj);
                 double minY = (double) aabbObj.getClass().getMethod("minY").invoke(aabbObj);
                 double minZ = (double) aabbObj.getClass().getMethod("minZ").invoke(aabbObj);
-                double maxX = (double) aabbObj.getClass().getMethod("getMaxX").invoke(aabbObj);
-                double maxY = (double) aabbObj.getClass().getMethod("getMaxY").invoke(aabbObj);
-                double maxZ = (double) aabbObj.getClass().getMethod("getMaxZ").invoke(aabbObj);
+                double maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
+                double maxY = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
+                double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
                 return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
             }
         } catch (Exception e) {
         }
         return null;
+    }
+
+    public IStorageWrapper getStorageWrapper() {
+        return this.storageWrapper;
     }
 }
