@@ -13,8 +13,6 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.ITickableUpgrade;
 import net.p3pp3rf1y.sophisticatedcore.upgrades.UpgradeWrapperBase;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
@@ -22,9 +20,6 @@ import java.util.*;
 import java.util.function.Consumer;
 
 public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWrapper, DockyardUpgradeItem> implements ITickableUpgrade {
-
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeWrapper");
-    private static final Logger LOGIC_LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
 
     private static final String NBT_PROCESS_ACTIVE = "DockyardProcessActive";
     private static final String NBT_PROCESS_TICKS = "DockyardProcessTicks";
@@ -63,16 +58,10 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                 ticks++;
                 tag.putInt(NBT_PROCESS_TICKS, ticks);
 
-                if (ticks == 1 || ticks % 20 == 0) {
-                    int secondsLeft = Math.max((ANIMATION_TICKS - ticks) / 20, 0);
-                    LOGIC_LOGGER.info("[DockyardUpgradeLogic] seconds_left: {}", secondsLeft);
-                }
-
                 ServerLevel serverLevel = (ServerLevel) level;
                 DockyardUpgradeLogic.ServerShipHandle ship = DockyardUpgradeLogic.findShipAboveBlock(serverLevel, blockPos, SHIP_RAY_DIST);
                 boolean shipValid = ship != null && ship.getId() == shipId;
                 if (!shipValid) {
-                    LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Ship not found or ID mismatch at process end. Aborting insert for slot {}", slot);
                     clearProcess(tag, be);
                     cleanupFlyingParticles(blockPos);
                     return;
@@ -105,28 +94,13 @@ public class DockyardUpgradeWrapper extends UpgradeWrapperBase<DockyardUpgradeWr
                                     slot,
                                     false
                             );
-                            if (result) {
-                                LOGIC_LOGGER.info("[DockyardUpgradeLogic] Ship stored to player {} slot {}", player.getGameProfile().getName(), slot);
-                            } else {
-                                String key = "ship" + slot;
-                                if (player.getCapability(PlayerDockyardDataProvider.DOCKYARD_CAP).map(cap -> cap.getDockyardData().contains(key)).orElse(false)) {
-                                    failReason = "slot already occupied";
-                                } else {
-                                    failReason = "unknown reason (see tryStoreShipToPlayerDockyard)";
-                                }
-                                LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Failed to save ship to player {} slot {}: {}", player.getGameProfile().getName(), slot, failReason);
-                            }
                         } catch (Exception e) {
-                            LOGIC_LOGGER.error("[DockyardUpgradeLogic] Exception during tryStoreShipToPlayerDockyard: {}", e.getMessage(), e);
+                            // ignore
                         }
-                    } else {
-                        LOGIC_LOGGER.warn("[DockyardUpgradeLogic] No player UUID found or player offline, ship NOT stored");
                     }
 
                     if (result) {
                         DockyardUpgradeLogic.removeShipFromWorldPublic(ship, serverLevel);
-                    } else {
-                        LOGIC_LOGGER.warn("[DockyardUpgradeLogic] Ship was NOT removed from world due to failed save.");
                     }
 
                     clearProcess(tag, be);

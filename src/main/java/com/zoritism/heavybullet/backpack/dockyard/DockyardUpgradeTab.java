@@ -14,14 +14,10 @@ import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.GuiHelper;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.Position;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.TextureBlitData;
 import net.p3pp3rf1y.sophisticatedcore.client.gui.utils.UV;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 
 public class DockyardUpgradeTab extends UpgradeSettingsTab<DockyardUpgradeContainer> {
-
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeTab");
 
     private static final int TAB_WIDTH = 103;
     private static final int TAB_HEIGHT = 92;

@@ -4,11 +4,8 @@ import net.minecraft.nbt.CompoundTag;
 
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 public class DockyardClientCache {
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardClientCache");
     private static final Map<Integer, CompoundTag> slots = new HashMap<>();
     private static boolean blockMode = false;
     private static long blockPos = 0L;
@@ -18,10 +15,6 @@ public class DockyardClientCache {
         slots.putAll(newMap);
         DockyardClientCache.blockMode = blockMode;
         DockyardClientCache.blockPos = blockPos;
-        LOGGER.info("[DockyardClientCache] Sync called. blockMode={}, blockPos={}, Current slots:", blockMode, blockPos);
-        for (Map.Entry<Integer, CompoundTag> entry : slots.entrySet()) {
-            LOGGER.info("[DockyardClientCache] slot {} = {}", entry.getKey(), entry.getValue());
-        }
     }
 
     public static boolean hasShipInSlot(int slot) {

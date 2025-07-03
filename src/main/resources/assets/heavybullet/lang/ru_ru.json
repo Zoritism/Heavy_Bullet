@@ -1,0 +1,16 @@
+{
+  "heavy_bullet.dockyard.ship_released": "Корабль выпущен!",
+  "heavy_bullet.dockyard.restore_failed": "Не удалось выпустить корабль!",
+  "heavy_bullet.dockyard.no_ship_stored": "В этом слоте нет корабля!",
+  "heavy_bullet.dockyard.already_has_ship": "Слот уже занят кораблем.",
+  "heavy_bullet.dockyard.no_ship_found": "Корабль не найден.",
+  "heavy_bullet.dockyard.process_already_running": "Процесс уже идёт.",
+  "heavy_bullet.dockyard.process_started": "Процесс начат!",
+  "heavy_bullet.dockyard.save_failed": "Не удалось сохранить корабль!",
+  "heavy_bullet.dockyard.ship_stored": "Корабль сохранён.",
+  "heavy_bullet.dockyard.remove_failed": "Не удалось убрать корабль из мира!",
+  "heavy_bullet.dockyard.no_backpack_found": "Рюкзак не найден.",
+  "heavy_bullet.dockyard.spawn_blocked": "Спавн заблокирован: над рюкзаком есть блоки.",
+  "gui.heavybullet.dockyard.title": "Док кораблей",
+  "gui.heavybullet.dockyard.tooltip": "Позволяет сохранять и выпускать корабли"
+}

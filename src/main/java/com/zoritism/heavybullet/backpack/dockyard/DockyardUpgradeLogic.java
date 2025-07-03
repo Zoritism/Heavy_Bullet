@@ -10,11 +10,12 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraftforge.network.PacketDistributor;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
@@ -24,7 +25,6 @@ import java.util.UUID;
 
 public class DockyardUpgradeLogic {
 
-    private static final Logger LOGGER = LogManager.getLogger("HeavyBullet/DockyardUpgradeLogic");
     private static final int ANIMATION_TICKS = 200; // 10 секунд на 20 TPS
 
     public static void handleBottleShipClick(ServerPlayer player, boolean release) {
@@ -89,7 +89,6 @@ public class DockyardUpgradeLogic {
             ServerShipHandle ship = findShipAboveBlock(serverLevel, pos, 20.0);
 
             if (ship != null) {
-                // Проверка: если уже идёт процесс засовывания в этот слот — не запускать второй раз
                 CompoundTag persistent = getOrCreatePersistentData(blockEntity);
                 boolean isActive = persistent.getBoolean("DockyardProcessActive");
                 int processSlot = persistent.getInt("DockyardProcessSlot");
@@ -97,13 +96,7 @@ public class DockyardUpgradeLogic {
                     player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.process_already_running"), true);
                     return;
                 }
-                // --- ЗАПУСК АНИМАЦИИ ЗАСОВЫВАНИЯ КОРАБЛЯ ---
-                // Сохраняем UUID игрока, который нажал кнопку (player)
                 DockyardUpgradeWrapper.startInsertShipProcess(blockEntity, slotIndex, ship.getId(), player.getUUID());
-
-                LOGGER.info("[DockyardUpgradeLogic] process_started");
-                LOGGER.info("[DockyardUpgradeLogic] seconds_left: {}", ANIMATION_TICKS / 20);
-
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.process_started"), true);
             } else {
                 player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.no_ship_found"), true);
@@ -175,7 +168,6 @@ public class DockyardUpgradeLogic {
 
     // Старая версия — для совместимости, использует reflection для distinction
     public static void handleDockyardShipClick(ServerPlayer player, int slotIndex, boolean release) {
-        // Извлекаем distinction через container + reflection
         boolean blockMode = false;
         long blockPosLong = 0L;
         if (player != null && player.containerMenu != null) {
@@ -280,6 +272,7 @@ public class DockyardUpgradeLogic {
     /**
      * Выпустить корабль из блока-рюкзака строго над ним (block mode).
      * Использует точную координату для спавна!
+     * Добавляет рейтрейс вверх на 50 блоков (если пусто — разрешает спавн) и облако частиц после спавна.
      */
     private static boolean releaseShipFromBlock(ServerPlayer player, BlockEntity blockEntity, CompoundTag shipNbt) {
         ServerLevel level = player.serverLevel();
@@ -288,19 +281,107 @@ public class DockyardUpgradeLogic {
         double x = blockPos.getX() + 0.5;
         double y = blockPos.getY() + 0.5;
         double z = blockPos.getZ() + 0.5;
-        double halfShipHeight = 1.0;
-        try {
-            if (shipNbt.contains("vs_ship_height")) {
-                halfShipHeight = shipNbt.getDouble("vs_ship_height") / 2.0;
-            }
-        } catch (Exception ignored) {}
 
-        Vec3 spawnPos = new Vec3(x, y + 5.0 + halfShipHeight, z);
+        double shipMinY = 0.0;
+        double shipMaxY = 0.0;
+        double shipHeight = 1.0;
+
+        // Получаем высоту корабля из NBT если есть (для совместимости)
+        if (shipNbt.contains("vs_ship_height")) {
+            shipHeight = shipNbt.getDouble("vs_ship_height");
+        }
+
+        // Получаем реальные размеры корабля (AABB) через reflection если возможно
+        AABB aabb = null;
+        long shipId = shipNbt.contains("vs_ship_id") ? shipNbt.getLong("vs_ship_id") : -1L;
+        if (shipId > 0) {
+            Object vsShip = getVsShipById(level, shipId);
+            if (vsShip != null) {
+                try {
+                    Object aabbObj = vsShip.getClass().getMethod("getWorldAABB").invoke(vsShip);
+                    if (aabbObj != null) {
+                        double minY_ = (double) aabbObj.getClass().getMethod("minY").invoke(aabbObj);
+                        double maxY_ = (double) aabbObj.getClass().getMethod("maxY").invoke(aabbObj);
+                        double minX = (double) aabbObj.getClass().getMethod("minX").invoke(aabbObj);
+                        double maxX = (double) aabbObj.getClass().getMethod("maxX").invoke(aabbObj);
+                        double minZ = (double) aabbObj.getClass().getMethod("minZ").invoke(aabbObj);
+                        double maxZ = (double) aabbObj.getClass().getMethod("maxZ").invoke(aabbObj);
+                        aabb = new AABB(minX, minY_, minZ, maxX, maxY_, maxZ);
+                        shipMinY = minY_;
+                        shipMaxY = maxY_;
+                        shipHeight = maxY_ - minY_;
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // Высота спавна: нижняя граница корабля на 5 блоков выше рюкзака
+        double spawnY = y + 5.0 - shipMinY;
+        Vec3 spawnPos = new Vec3(x, spawnY, z);
+
+        // 1. Рейтрейс вверх на 50 блоков
+        Vec3 rayStart = new Vec3(x, y + 1.0, z);
+        Vec3 rayEnd = new Vec3(x, y + 50.0, z);
+        ClipContext clipContext = new ClipContext(rayStart, rayEnd, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player);
+        HitResult hit = level.clip(clipContext);
+        boolean canSpawn = hit == null || hit.getType() == HitResult.Type.MISS;
+        if (!canSpawn) {
+            player.displayClientMessage(Component.translatable("heavy_bullet.dockyard.spawn_blocked"), true);
+            return false;
+        }
 
         UUID uuid = UUID.randomUUID();
-        // ВАЖНО: теперь передаем true для точного позиционирования при спавне из block mode!
         boolean result = VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, spawnPos, shipNbt, true);
+
+        // 2. После успешного спавна — облако частиц (огоньки)
+        if (result) {
+            spawnFlameParticleCloud(level, aabb, spawnPos);
+        }
+
         return result;
+    }
+
+    // Получить корабль VS по id через reflection
+    private static Object getVsShipById(ServerLevel level, long shipId) {
+        try {
+            Class<?> pipelineClass = Class.forName("org.valkyrienskies.mod.common.VSGameUtilsKt");
+            Method getVsPipeline = pipelineClass.getMethod("getVsPipeline", Class.forName("net.minecraft.server.MinecraftServer"));
+            Object pipeline = getVsPipeline.invoke(null, level.getServer());
+            if (pipeline == null) return null;
+            Object shipWorld = pipeline.getClass().getMethod("getShipWorld").invoke(pipeline);
+            if (shipWorld == null) return null;
+            Method getShipById = shipWorld.getClass().getMethod("getShipById", long.class);
+            Object ship = getShipById.invoke(shipWorld, shipId);
+            return ship;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // Спавнит облако огоньков (flame) в aabb или вокруг spawnPos, с движением вверх и разлётом, живут ~2 секунды
+    private static void spawnFlameParticleCloud(ServerLevel level, @Nullable AABB aabb, Vec3 spawnPos) {
+        double minX, maxX, minY, maxY, minZ, maxZ;
+        if (aabb != null) {
+            // Размеры рамки: +5 блоков во все стороны от корабля
+            minX = aabb.minX - 5.0; maxX = aabb.maxX + 5.0;
+            minY = aabb.minY - 5.0; maxY = aabb.maxY + 5.0;
+            minZ = aabb.minZ - 5.0; maxZ = aabb.maxZ + 5.0;
+        } else {
+            minX = spawnPos.x - 10.0; maxX = spawnPos.x + 10.0;
+            minY = spawnPos.y - 5.0; maxY = spawnPos.y + 15.0;
+            minZ = spawnPos.z - 10.0; maxZ = spawnPos.z + 10.0;
+        }
+        int totalParticles = 350;
+        for (int i = 0; i < totalParticles; i++) {
+            double px = minX + Math.random() * (maxX - minX);
+            double py = minY + Math.random() * (maxY - minY);
+            double pz = minZ + Math.random() * (maxZ - minZ);
+            // Больше скорости (больше разброс и вертикальная скорость)
+            double dx = (Math.random() - 0.5) * 0.55;
+            double dy = 0.25 + Math.random() * 0.35;
+            double dz = (Math.random() - 0.5) * 0.55;
+            level.sendParticles(ParticleTypes.FLAME, px, py, pz, 0, dx, dy, dz, 1.35);
+        }
     }
 
     private static boolean spawnShipFromNbt(ServerPlayer player, CompoundTag nbt) {
@@ -309,7 +390,6 @@ public class DockyardUpgradeLogic {
         Vec3 pos = player.position();
 
         try {
-            // Для item mode теперь обязательно передавать false в 6-й аргумент
             return VModSchematicJavaHelper.spawnShipFromNBT(level, player, uuid, pos, nbt, false);
         } catch (Throwable t) {
             return false;
@@ -335,7 +415,6 @@ public class DockyardUpgradeLogic {
 
     @Nullable
     public static ServerShipHandle findShipAboveBlock(ServerLevel level, BlockPos blockPos, double maxDistance) {
-        // Луч идёт строго вверх от позиции блока рюкзака
         Vec3 from = new Vec3(blockPos.getX() + 0.5, blockPos.getY() + 1.2, blockPos.getZ() + 0.5);
         int steps = (int) Math.ceil(maxDistance);
         for (int i = 0; i <= steps; i++) {
