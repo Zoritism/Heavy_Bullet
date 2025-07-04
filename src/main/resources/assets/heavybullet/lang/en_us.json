@@ -15,5 +15,6 @@
   "gui.heavybullet.dockyard.title": "Dockyard",
   "gui.heavybullet.dockyard.tooltip": "Allows storing and deploying ships",
   "item.heavybullet.energy_flashlight": "Flashlight",
-  "item.heavybullet.energy_flashlight_on": "Flashlight"
+  "item.heavybullet.energy_flashlight_on": "Flashlight",
+  "key.flashlight.toggle": "Toggle Flashlight"
 }

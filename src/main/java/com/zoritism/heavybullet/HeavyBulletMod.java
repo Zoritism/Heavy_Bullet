@@ -6,6 +6,7 @@ import com.zoritism.heavybullet.backpack.dockyard.DockyardUpgradeWrapper;
 import com.zoritism.heavybullet.config.ModConfigHandler;
 import com.zoritism.heavybullet.client.KeybindHandler;
 import com.zoritism.heavybullet.network.NetworkHandler;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
@@ -30,9 +31,10 @@ public class HeavyBulletMod {
             new UpgradeContainerType<>(DockyardUpgradeContainer::new);
 
     public HeavyBulletMod() {
+        // Используем instance-методы вместо устаревших статических get()!
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-        // Регистрация конфигурации
+        // Регистрация конфигурации (ModLoadingContext#getActiveContainer)
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ModConfigHandler.COMMON_SPEC);
 
         // Регистрация предметов и сетевых сообщений
@@ -52,7 +54,22 @@ public class HeavyBulletMod {
     }
 
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
-        event.accept(ModItems.DOCKYARD_UPGRADE);
+        // Используем new ResourceLocation(namespace, path) - КОРРЕКТНО для 1.20.1!
+        ResourceLocation heavybulletTab = new ResourceLocation("heavybullet", "heavybullet");
+        ResourceLocation sbUpgradesTab = new ResourceLocation("sophisticatedbackpacks", "upgrades");
+        if (event.getTabKey().location().equals(heavybulletTab)) {
+            event.accept(ModItems.DOCKYARD_UPGRADE);
+            // Добавляем оба фонарика во вкладку heavybullet
+            if (ModItems.ENERGY_FLASHLIGHT != null) {
+                event.accept(ModItems.ENERGY_FLASHLIGHT);
+            }
+            if (ModItems.ENERGY_FLASHLIGHT_ON != null) {
+                event.accept(ModItems.ENERGY_FLASHLIGHT_ON);
+            }
+        }
+        if (event.getTabKey().location().equals(sbUpgradesTab)) {
+            event.accept(ModItems.DOCKYARD_UPGRADE);
+        }
     }
 
     private void registerContainers(RegisterEvent event) {
