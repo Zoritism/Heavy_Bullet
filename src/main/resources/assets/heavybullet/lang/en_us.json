@@ -13,7 +13,7 @@
   "heavy_bullet.dockyard.no_backpack_found": "No backpack found.",
   "heavy_bullet.dockyard.spawn_blocked": "Spawn blocked: there are blocks above the backpack.",
   "gui.heavybullet.dockyard.title": "Dockyard",
-  "gui.heavybullet.dockyard.tooltip": "Allows storing and deploying ships"
+  "gui.heavybullet.dockyard.tooltip": "Allows storing and deploying ships",
   "item.heavybullet.energy_flashlight": "Flashlight",
   "item.heavybullet.energy_flashlight_on": "Flashlight"
 }

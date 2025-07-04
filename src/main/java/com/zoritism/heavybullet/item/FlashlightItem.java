@@ -119,7 +119,8 @@ public class FlashlightItem extends Item {
                     if (storage.getEnergyStored() > 0) {
                         storage.extractEnergy(drain, false);
                     } else {
-                        ItemStack off = new ItemStack(ModItems.FLASHLIGHT.get());
+                        // Исправлено: Используем ENERGY_FLASHLIGHT вместо FLASHLIGHT
+                        ItemStack off = new ItemStack(ModItems.ENERGY_FLASHLIGHT.get());
                         off.setTag(stack.getTag() != null ? stack.getTag().copy() : null);
 
                         if (player.getMainHandItem() == stack) {

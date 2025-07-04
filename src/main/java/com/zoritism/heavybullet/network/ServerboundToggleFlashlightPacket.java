@@ -45,9 +45,10 @@ public class ServerboundToggleFlashlightPacket {
                 return;
             }
 
-            // Готовим замену
-            ItemStack replacement = new ItemStack(isOn ? ModItems.FLASHLIGHT.get()
-                    : ModItems.FLASHLIGHT_ON.get());
+            // Готовим замену, устраняем неоднозначность через .get() и .getItem()
+            ItemStack replacement = isOn
+                    ? new ItemStack(ModItems.ENERGY_FLASHLIGHT.get())
+                    : new ItemStack(ModItems.ENERGY_FLASHLIGHT_ON.get());
             replacement.getOrCreateTag().putInt("Energy", Math.max(0, energy));
 
             player.setItemInHand(hand, replacement);

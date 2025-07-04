@@ -11,15 +11,16 @@ public class ModItems {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, "heavybullet");
 
     // Обычный фонарик (выключен)
-    public static final RegistryObject<Item> FLASHLIGHT =
+    public static final RegistryObject<Item> ENERGY_FLASHLIGHT =
             ITEMS.register("energy_flashlight", () ->
                     new FlashlightItem(false, new Item.Properties().stacksTo(1)));
 
     // Включённый фонарик
-    public static final RegistryObject<Item> FLASHLIGHT_ON =
+    public static final RegistryObject<Item> ENERGY_FLASHLIGHT_ON =
             ITEMS.register("energy_flashlight_on", () ->
                     new FlashlightItem(true, new Item.Properties().stacksTo(1)));
 
+    // Апгрейд дока
     public static final RegistryObject<DockyardUpgradeItem> DOCKYARD_UPGRADE =
             ITEMS.register("dockyard_upgrade", DockyardUpgradeItem::new);
 }
