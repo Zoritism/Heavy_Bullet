@@ -57,7 +57,7 @@ public class DockyardUpgradeContainer extends UpgradeContainerBase<DockyardUpgra
                                         if (upgTag.contains("id")) {
                                             try {
                                                 stack = new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
-                                                        new ResourceLocation(upgTag.getString("id"))));
+                                                        ResourceLocation.tryParse(upgTag.getString("id"))));
                                             } catch (Exception e) {
                                                 // ignore
                                             }

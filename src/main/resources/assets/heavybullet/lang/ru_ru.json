@@ -13,5 +13,7 @@
   "heavy_bullet.dockyard.no_backpack_found": "Рюкзак не найден.",
   "heavy_bullet.dockyard.spawn_blocked": "Спавн заблокирован: над рюкзаком есть блоки.",
   "gui.heavybullet.dockyard.title": "Корабельный Док",
-  "gui.heavybullet.dockyard.tooltip": "Позволяет сохранять и выпускать корабли"
+  "gui.heavybullet.dockyard.tooltip": "Позволяет сохранять и выпускать корабли",
+  "item.heavybullet.energy_flashlight": "Фонарик",
+  "item.heavybullet.energy_flashlight_on": "Фонарик"
 }

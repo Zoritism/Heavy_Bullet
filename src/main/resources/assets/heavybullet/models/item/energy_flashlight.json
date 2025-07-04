@@ -1,0 +1,7 @@
+{
+  "parent": "heavybullet:item/flashlightoff1",
+  "textures": {
+    "3": "heavybullet:block/flashlighttextureoff",
+    "particle": "heavybullet:item/energy_flashlight"
+  }
+}

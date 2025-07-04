@@ -30,5 +30,12 @@ public class NetworkHandler {
                 S2CSyncDockyardClientPacket::decode,
                 S2CSyncDockyardClientPacket::handle
         );
+        CHANNEL.registerMessage(
+                packetId++,
+                ServerboundToggleFlashlightPacket.class,
+                ServerboundToggleFlashlightPacket::encode,
+                ServerboundToggleFlashlightPacket::decode,
+                ServerboundToggleFlashlightPacket::handle
+        );
     }
 }
